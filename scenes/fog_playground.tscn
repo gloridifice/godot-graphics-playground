@@ -1,0 +1,241 @@
+[gd_scene format=3 uid="uid://y2k8t8trhip1"]
+
+[ext_resource type="Texture2D" uid="uid://nu6btp05qtin" path="res://addons/JehenoThirdPersonController/Arts/godot-prototype-texture/PNG/grid_1024x1024/grid_black_1024x1024.png" id="1_1ow5t"]
+[ext_resource type="PackedScene" uid="uid://bgkmxyw21pc1m" path="res://addons/JehenoThirdPersonController/PlayerCharacter/player_character_scene.tscn" id="2_kw53q"]
+[ext_resource type="Script" uid="uid://puj1iwmxwbme" path="res://scripts/fog_playground.gd" id="3_fog_playground"]
+[ext_resource type="Script" uid="uid://c4qkoieuiid0l" path="res://addons/heightfield_fog/heightfield_fog_box.gd" id="4_fog_box"]
+[ext_resource type="Script" uid="uid://25coo06v615h" path="res://addons/heightfield_fog/initialization.gd" id="5_fog_initialization"]
+[ext_resource type="Script" path="res://scripts/player/fog_playground_player.gd" id="6_player"]
+[ext_resource type="Script" path="res://scripts/camera/fog_playground_camera.gd" id="7_camera"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_6f4by"]
+sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
+ground_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
+
+[sub_resource type="Sky" id="Sky_d8mrn"]
+sky_material = SubResource("ProceduralSkyMaterial_6f4by")
+
+[sub_resource type="Environment" id="Environment_5lc62"]
+background_mode = 2
+sky = SubResource("Sky_d8mrn")
+tonemap_mode = 2
+glow_enabled = true
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.0
+volumetric_fog_length = 110.0
+
+[sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_xuepk"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bwcgl"]
+diffuse_mode = 1
+albedo_texture = ExtResource("1_1ow5t")
+metallic_specular = 0.0
+uv1_scale = Vector3(0.5, 0.5, 0.5)
+uv1_triplanar = true
+uv1_world_triplanar = true
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_q3h73"]
+size = Vector2(110, 110)
+
+[sub_resource type="Resource" id="Resource_ground_mist"]
+script = ExtResource("5_fog_initialization")
+base_height = 1.15
+horizontal_top = true
+max_thickness = 0.65
+concentration = 1.5
+noise_amplitude = 0.25
+noise_frequency = 0.995
+noise_seed = 23
+natural_mist_enabled = true
+top_softness = 0.85
+coverage = 0.62
+wind_stretch = 3.5
+wind_speed = 0.1
+
+[sub_resource type="Resource" id="Resource_surface_mist"]
+script = ExtResource("5_fog_initialization")
+base_height = 0.55
+max_thickness = 0.65
+concentration = 1.4
+noise_amplitude = 0.2
+noise_frequency = 0.6
+noise_seed = 37
+natural_mist_enabled = true
+top_softness = 0.9
+coverage = 0.68
+wind_stretch = 3.0
+wind_direction = -20.0
+wind_speed = 0.08
+
+[node name="FogPlayground" type="Node3D" unique_id=1917090299]
+script = ExtResource("3_fog_playground")
+
+[node name="Environment" type="Node3D" parent="." unique_id=1174428504]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="Environment" unique_id=1547784510]
+transform = Transform3D(-0.866023, -0.433016, 0.250001, 0, 0.499998, 0.866027, -0.500003, 0.749999, -0.43301, 0, 46.7243, -24.7815)
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="Environment" unique_id=2080482190]
+environment = SubResource("Environment_5lc62")
+
+[node name="Structures" type="Node3D" parent="." unique_id=2100093550]
+
+[node name="Ground" type="StaticBody3D" parent="Structures" unique_id=1637517233]
+collision_mask = 2
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Structures/Ground" unique_id=376318381]
+shape = SubResource("WorldBoundaryShape3D_xuepk")
+
+[node name="GroundMesh" type="MeshInstance3D" parent="Structures/Ground" unique_id=579565624]
+material_override = SubResource("StandardMaterial3D_bwcgl")
+mesh = SubResource("PlaneMesh_q3h73")
+skeleton = NodePath("../../..")
+
+[node name="CSGCombiner3D" type="CSGCombiner3D" parent="Structures" unique_id=203723703]
+material_override = SubResource("StandardMaterial3D_bwcgl")
+use_collision = true
+collision_mask = 2
+
+[node name="CSGBox3D" type="CSGBox3D" parent="Structures/CSGCombiner3D" unique_id=1096967427]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 1, -7)
+size = Vector3(8, 2, 10)
+
+[node name="CSGBox3D11" type="CSGBox3D" parent="Structures/CSGCombiner3D" unique_id=440609612]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 3, 23.5)
+size = Vector3(4, 6, 1)
+
+[node name="CSGBox3D2" type="CSGBox3D" parent="Structures/CSGCombiner3D" unique_id=58951412]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 1, -9)
+size = Vector3(4, 2, 6)
+
+[node name="CSGBox3D4" type="CSGBox3D" parent="Structures/CSGCombiner3D" unique_id=796792252]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 1, -9)
+size = Vector3(6, 2, 6)
+
+[node name="CSGBox3D7" type="CSGBox3D" parent="Structures/CSGCombiner3D" unique_id=736447179]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 23, 1, -17)
+size = Vector3(4, 2, 4)
+
+[node name="CSGBox3D8" type="CSGBox3D" parent="Structures/CSGCombiner3D" unique_id=779211097]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 2, -26)
+size = Vector3(4, 4, 4)
+
+[node name="CSGBox3D9" type="CSGBox3D" parent="Structures/CSGCombiner3D" unique_id=1191500146]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 29.5, 2.5, -38.5)
+size = Vector3(3, 5, 5)
+
+[node name="CSGBox3D10" type="CSGBox3D" parent="Structures/CSGCombiner3D" unique_id=642325701]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.5, 3.5, -44.5)
+size = Vector3(9, 7, 5)
+
+[node name="CSGBox3D3" type="CSGBox3D" parent="Structures/CSGCombiner3D" unique_id=873834853]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 2, -12)
+size = Vector3(6, 4, 12)
+
+[node name="CSGBox3D6" type="CSGBox3D" parent="Structures/CSGCombiner3D" unique_id=983441816]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 3, -21)
+size = Vector3(6, 6, 6)
+
+[node name="CSGBox3D5" type="CSGBox3D" parent="Structures/CSGCombiner3D" unique_id=124217807]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 3, -18)
+size = Vector3(14, 6, 12)
+
+[node name="CSGPolygon3D" type="CSGPolygon3D" parent="Structures/CSGCombiner3D" unique_id=832915049]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 2, 0, -6)
+polygon = PackedVector2Array(0, 0, 0, 2, 6, 0)
+depth = 4.0
+
+[node name="CSGPolygon3D5" type="CSGPolygon3D" parent="Structures/CSGCombiner3D" unique_id=126876448]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 26, 0, -6)
+polygon = PackedVector2Array(-1, 0, 0, 4, 6, 0)
+depth = 4.0
+
+[node name="CSGPolygon3D4" type="CSGPolygon3D" parent="Structures/CSGCombiner3D" unique_id=42670575]
+transform = Transform3D(-1, 0, 8.74228e-08, 0, 1, 0, -8.74228e-08, 0, -1, -6, 0, -6)
+polygon = PackedVector2Array(0, 0, 0, 2, 6, 0)
+depth = 4.0
+
+[node name="CSGPolygon3D3" type="CSGPolygon3D" parent="Structures/CSGCombiner3D" unique_id=1353893220]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, -18, 4, -18)
+polygon = PackedVector2Array(0, 0, 0, 2, 6, 0)
+depth = 6.0
+
+[node name="CSGPolygon3D2" type="CSGPolygon3D" parent="Structures/CSGCombiner3D" unique_id=995861979]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2, -6)
+polygon = PackedVector2Array(0, 0, 0, 2, 6, 0)
+depth = 6.0
+
+[node name="FogFields" type="Node3D" parent="." unique_id=1255730462]
+
+[node name="GroundMist" type="Node3D" parent="FogFields" unique_id=1756978656]
+transform = Transform3D(0.8660254, 0, 0.5, 0, 1, 0, -0.5, 0, 0.8660254, -4, -1.0090039, -8)
+script = ExtResource("4_fog_box")
+size = Vector3(32, 5.585217, 22)
+source_root = NodePath("../../Structures")
+initialization = SubResource("Resource_ground_mist")
+edge_fade = 3.0
+extinction = 2.0
+brightness = 0.35
+swe_enabled = true
+
+[node name="RampMist" type="Node3D" parent="FogFields" unique_id=284222956]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 1.8, -11)
+script = ExtResource("4_fog_box")
+size = Vector3(12, 4, 16)
+resolution = 96
+source_root = NodePath("../../Structures")
+initialization = SubResource("Resource_surface_mist")
+edge_fade = 1.5
+extinction = 1.8
+brightness = 0.35
+swe_enabled = true
+
+[node name="SpawnPlatformMist" type="Node3D" parent="FogFields" unique_id=255986769]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 5.8, -18)
+script = ExtResource("4_fog_box")
+size = Vector3(18, 1.2, 14)
+resolution = 96
+source_root = NodePath("../../Structures")
+initialization = SubResource("Resource_surface_mist")
+edge_fade = 1.8
+extinction = 2.0
+brightness = 0.35
+swe_enabled = true
+
+[node name="SteppingStonesMist" type="Node3D" parent="FogFields" unique_id=264512063]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 27, -0.5, -26)
+script = ExtResource("4_fog_box")
+size = Vector3(24, 8, 32)
+source_root = NodePath("../../Structures")
+initialization = SubResource("Resource_surface_mist")
+edge_fade = 3.0
+extinction = 1.8
+brightness = 0.35
+swe_enabled = true
+
+[node name="PlayerCharacter" parent="." unique_id=121184384 instance=ExtResource("2_kw53q")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 6, -18)
+script = ExtResource("6_player")
+
+[node name="CameraHolder" parent="PlayerCharacter" index="2"]
+script = ExtResource("7_camera")
+
+[node name="Controls" type="CanvasLayer" parent="."]
+
+[node name="Hint" type="Label" parent="Controls"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -36.0
+offset_right = 1200.0
+offset_bottom = -10.0
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 18
+text = "F: control / release  |  Esc: release  |  WASD: move  |  Space: jump (gather) / land (spread)"
+mouse_filter = 2
+
+[editable path="PlayerCharacter"]

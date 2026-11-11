@@ -17,7 +17,9 @@ func _run() -> void:
 		printerr("Forest walk test requires a focused graphical game window")
 		quit(1)
 		return
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "scene starts with a free visible cursor")
+	await _press_key(KEY_F)
+	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "physical F captures and hides the cursor via the input map")
 	_check(player.is_on_floor(), "spawn settles on generated terrain")
 	var start := player.global_position
 	Input.action_press("move_forward")
@@ -48,13 +50,8 @@ func _run() -> void:
 	for i in 90:
 		await physics_frame
 	_check(player.is_on_floor(), "jump lands back on terrain")
-	var event := InputEventAction.new()
-	event.action = "release_mouse"
-	event.pressed = true
-	Input.parse_input_event(event)
-	await process_frame
-	await process_frame
-	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "Esc action releases mouse")
+	await _press_key(KEY_ESCAPE)
+	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "physical Esc releases mouse")
 	start = player.global_position
 	Input.action_press("move_forward")
 	for i in 20:
@@ -68,7 +65,11 @@ func _run() -> void:
 	Input.parse_input_event(click)
 	await process_frame
 	await process_frame
-	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "click resumes control")
+	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "clicking the scene must not capture the cursor")
+	click.pressed = false
+	Input.parse_input_event(click)
+	await _press_key(KEY_F)
+	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "F resumes control after release")
 	# Actual generated perimeter collider, not a player-coordinate clamp.
 	var ray := PhysicsRayQueryParameters3D.create(Vector3(23,10,0),Vector3(23,-5,0),1)
 	var hit := player.get_world_3d().direct_space_state.intersect_ray(ray)
@@ -88,6 +89,18 @@ func _run() -> void:
 		await process_frame
 	print("Forest physics/input: ", "PASS" if failures == 0 else "FAIL")
 	quit(0 if failures == 0 else 1)
+
+func _press_key(key: Key) -> void:
+	var event := InputEventKey.new()
+	event.keycode = key
+	event.physical_keycode = key
+	event.pressed = true
+	Input.parse_input_event(event)
+	await process_frame
+	await process_frame
+	event.pressed = false
+	Input.parse_input_event(event)
+	await process_frame
 
 func _check(condition: bool, message: String) -> void:
 	if not condition:

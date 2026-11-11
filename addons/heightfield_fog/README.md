@@ -7,10 +7,12 @@
 1. 启用 Heightfield Fog 插件（本项目已启用）。新建 `HeightfieldFogBox` 节点。
 2. 节点原点是**底面中心**。原生 Move/Rotate gizmo 控制位置和 Y 旋转；三个自定义手柄调整宽、高、深，支持撤销。不要旋转 X/Z 或缩放节点／父级，用 Size 改尺寸。
 3. Source Root 指向包含静态模型的节点，留空使用当前场景。自动选取可见 MeshInstance3D 的向上表面；蒙皮不参与。为不需要烘焙的 mesh 添加 `heightfield_fog_ignore` 分组（例如玩家、透明叶片）。
-4. 点击 Inspector 的 **Bake local heightfield**，再保存场景。高度图随场景保存，不需要独立资源路径。改变盒体位置／尺寸／旋转或分辨率后旧结果停止显示，需要重烘焙。修改源模型后也要手动重烘焙。
+4. 每次进入场景（编辑器／运行时）会自动烘焙，延后两个处理帧等待场景几何就绪。高度图及烘焙签名只保存在节点内存中，不写入 `.tscn` 或独立资源；保存场景只保存参数，烘焙本身不会将场景标记为未保存。改变盒体位置／尺寸／旋转或分辨率后旧结果停止显示，可点击 Inspector 的 **Bake local heightfield** 更新当前内存缓存；修改源模型后同样手动重烘焙，或重新进入场景。
 5. 在 **Initialization** 新建 `HeightfieldFogInitialization`，或拖入 `.tres` 初始化资产。展开资源调初态；外观仍由节点的 Extinction、Tint、Brightness 控制。**Edge Fade** 为向内渐出的宽度（米，默认 1，0 关闭），实时生效，无需重烘焙。
 
-直接打开 `demo.tscn` 按 F6，或 F5 启动主场景，可查看程序化森林：缓坡、土路、针叶树、倒木、大小岩石和两片局部薄雾。示例复用项目 `scenes/player.tscn` 与 Phantom Camera 第三人称控制器：WASD 行走、鼠标环绕、空格跳跃、Esc 释放鼠标、单击恢复；地面、岩石、树干及倒木有碰撞，边缘防跌落。森林已开启 GPU SWE；起跳向脚边注入径向动量，雾随后输送和堆积，不按计时器恢复。行走和落地不触发。核心雾盒仍独立于这些示例依赖。固定种子生成几何，不使用外部美术素材。示例启动时自动烘焙地面与岩石，不烘焙树冠／倒木；常规使用不会隐式重烘焙。原桥下／桥面分层场景保留在 `fixtures/stacked_floors.tscn` 供测试使用。
+项目 F5 主场景为 `scenes/fog_playground.tscn`，四片雾均开启 SWE：起跳汇聚、落地扩散。启动鼠标自由可见，F 切换控制／释放，Esc 或失焦释放；本地控制器／相机子类保留第三方源码不变。
+
+直接打开 `demo.tscn` 按 F6，可查看可选的程序化森林：缓坡、土路、针叶树、倒木、大小岩石和两片局部薄雾。示例复用项目 `scenes/player.tscn` 与 Phantom Camera 第三人称控制器：启动时鼠标自由可见，按 F 锁定并隐藏鼠标后，WASD 行走、鼠标环绕、空格跳跃；Esc 或窗口失焦释放鼠标，单击不再自动锁定；地面、岩石、树干及倒木有碰撞，边缘防跌落。森林已开启 GPU SWE；起跳向脚边注入径向动量，雾随后输送和堆积，不按计时器恢复。行走和落地不触发。核心雾盒仍独立于这些示例依赖。固定种子生成几何，不使用外部美术素材。所有雾盒在进入场景时自动烘焙；森林仅选择地面与岩石，不烘焙树冠／倒木。场景内编辑仍需手动重烘焙，不逐帧扫描几何。原桥下／桥面分层场景保留在 `fixtures/stacked_floors.tscn` 供测试使用。
 
 ## 初始化资产
 
@@ -21,15 +23,16 @@
 | Base Height | 默认 0.4 m；普通模式为地面上方厚度，Horizontal Top 模式为相对盒底的雾顶高度 |
 | Height Offset | 有符号高度偏移，单位 m，最终厚度不小于 0 |
 | Horizontal Top | 从设定雾顶减去每格承载高度；无噪声时雾顶水平 |
-| Concentration | 初始浓度，无量纲，默认 1；不改变厚度，0 为无雾 |
+| Max Thickness | 初始贴地厚度上限，单位 m；0 不限制，低洼处也不会在初始化时灌成厚雾池；SWE 后续仍可堆积 |
+| Concentration | 显示浓度，无量纲，默认 1；0 为无雾，修改不会重置 SWE |
 | Noise Amplitude | 有符号 fBm 的高度振幅，单位 m，默认 0（关闭） |
-| Noise Frequency | 盒体局部 X/Z 空间频率，单位 1/m |
+| Noise Frequency | 空间频率，单位 1/m；小值形成宽雾带，大值形成细碎纹理 |
 | Noise Octaves / Seed | fBm 层数／随机种子，相同配置确定性重现 |
-| Noise Offset | 局部 X/Z 噪声采样偏移，单位 m |
+| Noise Offset | X/Z 噪声采样偏移，单位 m；自然模式使用世界坐标，普通模式使用盒局部坐标 |
 
-初态厚度为 `max(0, Base Height + Height Offset + Noise Amplitude × noise)`；水平雾顶模式在裁零前再减地形局部高度。边界渐出随后在 GPU 查询时应用。
+初态厚度为 `max(0, Base Height + Height Offset + Noise Amplitude × noise)`；水平雾顶模式在裁零前再减地形局部高度，然后应用 Max Thickness。边界渐出随后在 GPU 查询时应用。所有模式都使用这些噪波参数，包括 Natural Mist 与 SWE 初态，没有另一套隐藏的雾顶生成方式。
 
-基础初态参数变化会在编辑器和运行时重新生成该盒体的初态厚度纹理，不重新烘焙地形；生成数据不写回共享资产，场景保存参数及地形纹理，初态纹理运行时重建。旧模式仍是静态初态显示。
+基础初态参数变化会在编辑器和运行时重新生成该盒体的初态厚度纹理，不重新烘焙地形；生成数据不写回共享资产，场景只保存参数；地形纹理在每次进入场景时重新烘焙，初态纹理随后在内存中重建。旧模式仍是静态初态显示。
 
 保留 `presets/low_mist.tres`（有噪声）和 `presets/soft_layer.tres`（均匀薄雾），分层测试继续使用它们；森林示例的两个盒体改为共享 `presets/forest_mist.tres`。旧场景中的 `layer_height` 自动读取为新资源的 Base Height，不再写回旧属性。
 
@@ -39,28 +42,38 @@
 
 | 参数 | 含义与范围 |
 | --- | --- |
-| Top Variation | 雾顶最大起伏，0～2 m；0 为无起伏 |
-| Top Scale | 世界空间大尺度起伏尺寸，4～80 m |
 | Top Softness | 顶部渐淡带占层厚的比例，0.1～1；下部连续，顶部平滑变淡 |
-| Detail Strength | 密度细节强度，0～0.8；0 为平滑连续层，不改变雾顶 |
-| Detail Scale | 横风向细节尺度，1～16 m，避免过细结构被体积网格漏采 |
-| Wind Stretch | 沿风向与横风向尺度比，1～8 |
+| Coverage | 显示覆盖率控制，0 无雾、1 连续层，中间值产生留白和雾带；不是精确面积百分比，不删除模拟质量 |
+| Coverage Softness | 雾带到透明区域的过渡宽度，0.01～0.5；越小边界越清晰 |
+| Detail Strength | 额外密度细节强度，0～0.8；0 关闭额外调制，但保留 Coverage |
+| Detail Scale | 密度纹理相对高度噪波的尺寸倍率，0.25～8；1 为同一尺度 |
+| Wind Stretch | 沿风向与横风向尺度比，1～8；同时拉伸初态高度噪波与显示密度 |
 | Wind Direction | 世界 X/Z 平面风向，−180～180°；0 为 +X，90 为 +Z |
-| Wind Speed | 程序化漂移速度，0～1 m/s；0 静止，不是流体速度求解 |
+| Wind Speed | 密度漂移速度，0～1 m/s；0 静止，不移动静态厚度或推动 SWE |
 
-以上参数实时生效，无需重烘焙，也不因逐帧动画重建厚度图。自然模式绕过旧 Initial Noise 的 Amplitude／Frequency／Octaves；Seed 与 Offset 仍用于新的世界空间噪声，Offset 单位为米。GPU 使用固定种子的平滑值噪声与两层低频细节，不逐帧随机换种子。
+资源生成一张可平铺 FastNoiseLite fBm 纹理，CPU 初态和 GPU 密度读取同一信号；不再在 shader 中重造哈希噪波。种子／层数变化更新缓存，频率／偏移在采样坐标上生效。旧 `top_variation`／`top_scale` 读取时迁移为 Noise Amplitude／Noise Frequency（1 / scale），Inspector 不再出现两组相互竞争的高度噪波参数。旧图案不保证逐像素一致。
 
-森林预设的基准雾顶为盒底上方 2.55 m；两个盒底均在世界 Y=−2 m，因此世界平均雾顶一致为 0.55 m，最大起伏 ±0.25 m。风向与纹理使用世界坐标，旋转盒体不旋转风向；不同高度盒底需要分别调整 Base Height 来对齐雾顶。共享资源编辑会影响两个盒体，可 Make Unique 分离。
+**会重建初态并重置 SWE**：高度、厚度上限、Noise 全组，以及自然模式的 Wind Direction／Stretch。**只改显示、不重置模拟**：Concentration、Coverage、Coverage Softness、Top Softness、Detail Strength／Scale、Wind Speed。都无需重烘焙地形；动画不逐帧重建纹理。
 
-自然模式保持竖向积分平均与盒边渐出，顶部留出起伏保护带；下部密度较连续，顶部密度细节更明显。森林节点 Brightness 降为 0.06，并保持时间重投影开启。漂移是程序化视觉动画，不包含绕障碍或质量守恒。
+### 贴地雾带调参
 
-## GPU SWE 与起跳
+森林共享预设 `presets/forest_mist.tres` 已配置：Base Height=2.55 m、Horizontal Top 开启、Max Thickness=0.38 m、Noise Amplitude=0.35 m、Frequency=0.4、Octaves=3、Coverage=0.5、Coverage Softness=0.12、Top Softness=0.85、Wind Stretch=4.5、Concentration=1.8。盒底均为世界 Y=−2 m，基准水平雾顶为 0.55 m；实际初始厚度受噪波、地形和 0.38 m 上限共同限制，并不是整片恒高的雾池。
 
-森林两个雾盒均开启 **SWE Enabled**。每盒有独立厚度与 X/Z 动量场，使用 GPU 一阶浅水求解器推进。`swe_solver.gd` 调度，`shaders/swe.glsl` 计算，输出 Texture2DRD 直接供 FogVolume 读取，正常帧不回读 CPU。
+- 更薄：降低 Max Thickness；若已经运行 SWE，需要重建初态才应用新上限。
+- 更多地面留白：降低 Coverage；更淡：降低 Concentration。
+- 更宽、更长的雾带：降低 Noise Frequency、提高 Wind Stretch。
+- 想随山坡铺开：关闭 Horizontal Top，把 Base Height 改为约 0.2～0.4 m。此模式也会给岩石顶铺雾。
+- 想保留设计好的厚度：关闭 SWE；需要起跳扰动则保留 SWE，接受雾量随时间向低处输送、堆积。Wind Speed 只移动疏密纹理，不改变物理质量。
+
+自然模式保持竖向积分平均与盒边渐出。纹理在噪声空间以 32 单位重复（横风向世界周期为 `32 / Frequency` m），512² 有限分辨率；过高频率或层数仍可能被高度网格／froxel 漏采。森林保持时间重投影开启。完整边界见 [薄雾生成合约](../../doco/specs/heightfield-mist.md)。
+
+## GPU SWE 与角色交互
+
+主场景四个雾盒及森林两个雾盒均开启 **SWE Enabled**。每盒有独立厚度与 X/Z 动量场，使用 GPU 一阶浅水求解器推进。`swe_solver.gd` 调度，`shaders/swe.glsl` 计算，输出 Texture2DRD 直接供 FogVolume 读取，正常帧不回读 CPU。
 
 | 参数 | 含义 |
 | --- | --- |
-| SWE Enabled | 默认关闭、森林启用；运行时模拟，编辑器仍为静态预览；开关会重置状态 |
+| SWE Enabled | 默认关闭、主场景及森林启用；运行时模拟，编辑器仍为静态预览；开关会重置状态 |
 | SWE Paused | 暂停推进但保留当前状态，不接受新跳跃冲量 |
 | SWE Gravity | 约化重力，0.05～9.81 m/s²，默认 1.2；控制浅层波传播，不是环境重力 |
 | SWE Drag | 动量阻尼，0～4 s⁻¹，默认 0.45；不删除质量 |
@@ -69,9 +82,11 @@
 | Jump Radius | 径向冲量范围，0.2～6 m，默认 2.5 |
 | Jump Speed | 速度增量，0～4 m/s，默认 1.8；0 关闭冲量 |
 
-`disturb_mist(world_feet)` 将脚底转换为盒体局部坐标，向范围内已有厚度对应的动量注入一次向外冲量。高差 1.5 m 外不施加；每个模拟批次最多四个事件，溢出替换最旧。起跳不直接减厚度，后续由通量输送产生中心变薄、外围堆积和波动。无固定恢复时长；原 Jump Duration／Jump Strength 视觉方案已移除，未开启 SWE 时不响应跳跃。
+`disturb_mist(world_feet, radial_strength=1)` 将脚底转换为盒体局部坐标，向范围内已有厚度对应的动量注入一次径向冲量。有符号强度限定为 [−1, 1]：负值汇聚、正值扩散，0 不施加；省略时维持向外冲量。高差 1.5 m 外不施加；每个模拟批次最多四个事件，溢出替换最旧。厚度增减由后续 SWE 通量输送产生，不直接生成或删除雾量，无固定恢复时长。
 
-SWE 开启时，厚度完全来自求解器：自然模式的 Top Variation 不再构造物理雾顶，Wind 参数只移动显示密度细节、不推动动量；软顶部剖面和边缘渐出仍保留。初态参数、烘焙图或尺寸变化会重建状态；共享资产不保存模拟结果。盒边／无效格是反射边界，盒间不交换通量。地形岩石可以形成承载高度障碍，但树干、倒木的角色碰撞不自动进入 SWE。
+主场景的控制器子类检测真实接地起跳／落地，分别发送 −0.8／+1 强度；可在根节点 **Player Mist Interaction** 调整。出生初次接地和空中二段跳不触发地面扰雾，落地向下速度需超过 1 m/s。释放鼠标期间仍会落地并扩散；森林保留原来的只在起跳向外扩散行为。未开启 SWE 时没有视觉替代。
+
+SWE 从与编辑器预览相同的噪波厚度启动，随后厚度完全来自求解器；不再被程序化雾顶覆盖。Wind Speed 只移动显示密度细节、不推动动量；软顶部剖面和边缘渐出仍保留。初态参数、烘焙图或尺寸变化会重建状态；共享资产不保存模拟结果。盒边／无效格是反射边界，盒间不交换通量。地形岩石可以形成承载高度障碍，但树干、倒木的角色碰撞不自动进入 SWE。
 
 GPU 自适应 CFL 与排出量限制保证稳定性／非负；极端状态可能限速，卡顿超过追赶预算会记录丢时，不保证任意参数下实时追平。详见 [SWE 合约](../../doco/specs/heightfield-swe.md)。
 

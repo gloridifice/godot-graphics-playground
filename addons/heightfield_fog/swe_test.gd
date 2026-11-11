@@ -78,6 +78,28 @@ func _run() -> void:
 	_check(stressed.faults==0,"strong impulses do not trigger NaN recovery")
 	_check(absf(_mass(stressed)-_mass(baseline))/_mass(baseline)<0.0003,"draining limiter preserves mass under strong impulses")
 	solver.close()
+	# Signed inward impulses must gather existing layer mass, not just invert a visual mask.
+	terrain.fill(Color(0,1,0,0))
+	initial.fill(Color(0.6,0,0,0))
+	solver = HeightfieldFogSWE.new()
+	solver.configure(terrain,initial,Vector2(8,8))
+	await _wait_ready(solver)
+	var gather_start := await _snapshot(solver)
+	solver.impulse(Vector3.ZERO, -1.0)
+	for i in 8:
+		solver.advance(1.0/60,1.2,0.45,2.0,1.8)
+		await process_frame
+	var gathered := await _snapshot(solver)
+	var radial_momentum := 0.0
+	for z in 32:
+		for x in 32:
+			var offset := (Vector2(x,z)+Vector2.ONE*0.5-Vector2(16,16))*0.25
+			var cell := (z*32+x)*4
+			radial_momentum += Vector2(gathered.state[cell+1],gathered.state[cell+2]).dot(offset)
+	_check(radial_momentum < -1.0, "negative radial strength creates inward GPU momentum")
+	_check(gathered.state[(16*32+16)*4] > 0.65, "inward SWE transport accumulates thickness at the center")
+	_check(absf(_mass(gathered)-_mass(gather_start))/_mass(gather_start)<0.0001 and gathered.faults==0, "gathering preserves mass without numerical faults")
+	solver.close()
 	# A dam release must wet previously dry terrain, without leaking into invalid cells.
 	terrain.fill(Color(0,1,0,0))
 	initial.fill(Color(0,0,0,0))

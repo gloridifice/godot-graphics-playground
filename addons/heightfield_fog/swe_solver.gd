@@ -89,12 +89,13 @@ func _initialize_rd(terrain: PackedByteArray, initial: PackedByteArray, heights:
 			return
 	_finish.call_deferred(true)
 
-func impulse(local_feet: Vector3) -> void:
-	if _closed or not local_feet.is_finite():
+## Signed radial multiplier: negative gathers, positive spreads; never changes mass.
+func impulse(local_feet: Vector3, radial_strength: float = 1.0) -> void:
+	if _closed or not local_feet.is_finite() or not is_finite(radial_strength) or radial_strength == 0.0:
 		return
 	if _events.size() >= 4:
 		_events.remove_at(0)
-	_events.append(Vector4(local_feet.x,local_feet.y,local_feet.z,0))
+	_events.append(Vector4(local_feet.x,local_feet.y,local_feet.z,clampf(radial_strength,-1.0,1.0)))
 
 func advance(delta: float, gravity: float, drag: float, radius: float, speed: float) -> void:
 	if not ready or _closed:

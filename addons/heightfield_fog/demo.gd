@@ -12,9 +12,6 @@ func _ready() -> void:
 		player.position = Vector3(spawn.x, _height(spawn.x, spawn.y) + 0.94, spawn.y)
 		player.reset_physics_interpolation()
 		player.jumped.connect(_on_player_jumped)
-		for child in get_children():
-			if child is HeightfieldFogBox and not child.is_bake_current():
-				child.bake()
 
 func _on_player_jumped(feet_position: Vector3) -> void:
 	# Every local box receives the same world-space event; no seam at rotated box boundaries.

@@ -1,7 +1,6 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://addons/heightfield_fog/heightfield_fog_box.gd" id="1"]
-[ext_resource type="Script" path="res://addons/heightfield_fog/fixtures/stacked_floors.gd" id="2"]
 [ext_resource type="Resource" path="res://addons/heightfield_fog/presets/low_mist.tres" id="3"]
 [ext_resource type="Resource" path="res://addons/heightfield_fog/presets/soft_layer.tres" id="4"]
 [sub_resource type="Environment" id="Environment"]
@@ -30,7 +29,6 @@ size = Vector3(0.4, 3, 0.4)
 [sub_resource type="CameraAttributesPractical" id="CameraAttributes"]
 
 [node name="HeightfieldFogDemo" type="Node3D"]
-script = ExtResource("2")
 [node name="Environment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment")
 [node name="Sun" type="DirectionalLight3D" parent="."]

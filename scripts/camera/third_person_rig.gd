@@ -10,8 +10,11 @@ var _pitch: float = deg_to_rad(-18.0)
 func _ready() -> void:
 	phantom.follow_target = target
 	_apply_orbit()
-	# Delay capture until the game window has completed its initial focus change.
-	_capture.call_deferred()
+	# All scenes start in inspection mode; entering gameplay requires an explicit F press.
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func _exit_tree() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
@@ -21,7 +24,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("release_mouse"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_viewport().set_input_as_handled()
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+	elif event.is_action_pressed("capture_mouse"):
 		_capture()
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:

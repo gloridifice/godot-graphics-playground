@@ -12,39 +12,19 @@ uniform float brightness = 0.3;
 uniform float vertical_filter = 0.1;
 
 uniform bool natural_mist_enabled = false;
-uniform bool horizontal_top = false;
-uniform float baseline_height = 0.4;
-uniform float top_variation = 0.25;
-uniform float top_scale = 20.0;
+uniform sampler2D noise_map : filter_linear, repeat_enable;
+// Frequency / tile period: same noise-space conversion as CPU initialization.
+uniform float noise_uv_scale = 0.01;
+uniform float coverage = 1.0;
+uniform float coverage_softness = 0.15;
 uniform float top_softness = 0.65;
 uniform float detail_strength = 0.3;
-uniform float detail_scale = 3.0;
+uniform float detail_scale = 1.0;
 uniform float wind_stretch = 4.0;
 uniform vec2 wind_direction = vec2(1.0, 0.0);
 uniform float wind_speed = 0.12;
 uniform float mist_time = 0.0;
-uniform float noise_seed = 7.0;
 uniform vec2 noise_offset = vec2(0.0);
-uniform bool swe_active = false;
-
-// Smooth, deterministic value noise: no reseeding or texture upload during animation.
-float hash_value(vec2 p) {
-	vec3 q = fract(vec3(p.xyx) * 0.1031 + fract(noise_seed * 0.0137));
-	q += dot(q, q.yzx + 33.33);
-	return fract((q.x + q.y) * q.z);
-}
-
-float smooth_noise(vec2 p) {
-	vec2 cell = floor(p);
-	vec2 f = fract(p);
-	f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
-	return mix(mix(hash_value(cell), hash_value(cell + vec2(1.0, 0.0)), f.x),
-		mix(hash_value(cell + vec2(0.0, 1.0)), hash_value(cell + vec2(1.0)), f.x), f.y) * 2.0 - 1.0;
-}
-
-float broad_noise(vec2 p) {
-	return (smooth_noise(p) + 0.35 * smooth_noise(p * 2.03 + vec2(17.2, 9.4))) / 1.35;
-}
 
 // Antiderivative of a constant lower density with a smoothstep fade at the top.
 // Average over a vertical interval instead of point-sampling the thin profile.
@@ -82,23 +62,25 @@ void fog() {
 			if (natural_mist_enabled) {
 				// A world-aligned field prevents rotated/adjacent boxes from rotating the wind.
 				vec2 advected = WORLD_POSITION.xz + noise_offset - wind_direction * wind_speed * mist_time;
-				float top_offset = swe_active ? 0.0 : top_variation * broad_noise(advected / top_scale);
-				// Subtract terrain BEFORE clamping: a rock above the mist top must stay dry.
-				float h = (swe_active ? textureLod(thickness_map, uv, 0.0).r : max(baseline_height + top_offset - (horizontal_top ? ground : 0.0), 0.0)) * weight;
+				// No alternate procedural top: preview and SWE consume the same resource-built field.
+				float h = textureLod(thickness_map, uv, 0.0).r * weight;
 				if (h > 0.00001 && y > -radius && y < h + radius) {
 					vec2 across = vec2(-wind_direction.y, wind_direction.x);
-					vec2 q = vec2(dot(advected, wind_direction) / wind_stretch, dot(advected, across)) / detail_scale;
-					q.y += 0.3 * broad_noise(advected / top_scale + vec2(31.0, 7.0));
-					// Keep a connected body; detail is stronger near the soft upper boundary.
-					float modulation = 1.0 + detail_strength * broad_noise(q) * mix(0.4, 1.0, smoothstep(0.0, h, y));
-					float coverage = mist_integral(y + radius, h) - mist_integral(y - radius, h);
-					DENSITY = extinction * concentration * max(coverage, 0.0) / (2.0 * radius) * modulation;
+					vec2 q = vec2(dot(advected, wind_direction) / wind_stretch, dot(advected, across));
+					float noise = textureLod(noise_map, q * noise_uv_scale / detail_scale, 0.0).r;
+					// Coverage shapes visible wisps only; never erases mass from the SWE state.
+					// Move the threshold past [0, 1] at the endpoints, without an abrupt switch.
+					float threshold = mix(1.0 + coverage_softness, -coverage_softness, coverage);
+					float mask = smoothstep(threshold - coverage_softness, threshold + coverage_softness, noise);
+					float modulation = 1.0 + detail_strength * (noise * 2.0 - 1.0) * mix(0.4, 1.0, smoothstep(0.0, h, y));
+					float column = mist_integral(y + radius, h) - mist_integral(y - radius, h);
+					DENSITY = extinction * concentration * max(column, 0.0) / (2.0 * radius) * modulation * mask;
 				}
 			} else {
 				float h = textureLod(thickness_map, uv, 0.0).r * weight;
 				if (h > 0.00001) {
-					float coverage = integral((y + radius) / h) - integral((y - radius) / h);
-					DENSITY = extinction * concentration * h * coverage / (2.0 * radius);
+					float column = integral((y + radius) / h) - integral((y - radius) / h);
+					DENSITY = extinction * concentration * h * column / (2.0 * radius);
 				}
 			}
 		}

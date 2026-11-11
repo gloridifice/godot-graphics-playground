@@ -12,7 +12,7 @@ layout(push_constant,std430) uniform Params {
     vec4 physics; // dx, dz, reduced gravity m/s², drag 1/s
     vec4 step; // requested dt, impulse radius m, impulse speed m/s, stage
     ivec4 grid; // width, height, event count, unused
-    vec4 events[4]; // box-local feet XYZ; W unused
+    vec4 events[4]; // box-local feet XYZ; W signed radial strength [-1, 1]
 } p;
 const float DRY = 0.00001;
 int index_of(ivec2 c) { return c.y*p.grid.x+c.x; }
@@ -29,7 +29,7 @@ vec3 load_state(ivec2 c) {
             float r=length(offset);
             float weight=(1.0-smoothstep(0.0,p.step.y,r))*(1.0-smoothstep(0.2,1.5,abs(bed(c)-p.events[i].y)));
             // Momentum impulse only: never remove or add layer mass.
-            u.yz+=u.x*p.step.z*weight*offset/max(r,0.00001);
+            u.yz+=u.x*p.step.z*p.events[i].w*weight*offset/max(r,0.00001);
         }
     }
     return u;

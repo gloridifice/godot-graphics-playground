@@ -35,7 +35,7 @@ func _run() -> void:
 	preset.natural_mist_enabled = true
 	preset.horizontal_top = true
 	preset.base_height = 2.5
-	preset.top_variation = 0.0
+	preset.noise_amplitude = 0.0
 	preset.detail_strength = 0.0
 	preset.wind_speed = 0.0
 	preset.top_softness = 0.1
@@ -57,10 +57,24 @@ func _run() -> void:
 	image = await _capture()
 	_check(_patch(camera, image, Vector3(-2,0,0)) < low * 0.9, "softer top must smoothly reduce integrated column density")
 	rock.visible = false
-	preset.top_variation = 0.3
+	box.bake()
+	# Regression: .tres noise controls must reach the rendered static AND GPU initial field.
+	# Pause SWE before startup so physics cannot smooth away the compared initial shapes.
+	preset.noise_amplitude = 0.6
+	box.swe_paused = true
+	for simulated in [false, true]:
+		box.swe_enabled = simulated
+		preset.noise_frequency = 0.13
+		var coarse := await _capture()
+		preset.noise_frequency = 0.83
+		var fine := await _capture()
+		_check(_difference(coarse, fine) > 0.002, "noise frequency changes actual mist, including paused SWE initialization: %s" % simulated)
+	box.swe_enabled = false
+	box.swe_paused = false
+	preset.noise_amplitude = 0.3
+	preset.noise_frequency = 0.5
 	preset.detail_strength = 0.6
-	preset.detail_scale = 1.5
-	preset.top_scale = 4.0
+	preset.detail_scale = 0.5
 	box.bake()
 	var before := await _capture()
 	var repeat := await _capture()
@@ -77,7 +91,7 @@ func _run() -> void:
 	# End-to-end: actual SWE output must reach the fog shader through Texture2DRD,
 	# including world-to-local impulse conversion for this rotated box.
 	preset.wind_speed = 0.0
-	preset.top_variation = 0.0
+	preset.noise_amplitude = 0.0
 	preset.detail_strength = 0.0
 	box.swe_enabled = true
 	for i in 120:
@@ -92,6 +106,16 @@ func _run() -> void:
 	var frozen := await _capture()
 	var still := await _capture()
 	_check(_difference(frozen,still)<0.001,"pausing SWE freezes physical shape")
+	preset.concentration = 0.25
+	var faint := await _capture()
+	_check(_difference(frozen, faint) > 0.002, "concentration remains a live visual control")
+	preset.coverage = 0.0
+	var clear := await _capture()
+	_check(_patch(camera, clear, Vector3(-2,0,0)) < 0.002, "zero coverage leaves clear ground")
+	preset.concentration = 1.0
+	preset.coverage = 1.0
+	var restored := await _capture()
+	_check(_difference(frozen, restored) < 0.001, "density/coverage edits must preserve the disturbed paused SWE state")
 	# Exercise disposal/recreation without stale GPU texture bindings.
 	box.swe_enabled = false
 	await _capture()

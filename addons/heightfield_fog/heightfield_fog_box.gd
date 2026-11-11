@@ -25,11 +25,6 @@ const FogShader = preload("res://addons/heightfield_fog/heightfield_fog.gdshader
 @export var tint := Color(0.85, 0.9, 1.0)
 @export_range(0.0, 2.0, 0.01) var brightness: float = 0.3
 @export_range(0.002, 0.5, 0.002, "suffix:m") var vertical_filter: float = 0.1
-@export_storage var height_map: Texture2D
-@export_storage var baked_transform := Transform3D.IDENTITY
-@export_storage var baked_size := Vector3.ZERO
-@export_storage var baked_resolution: int = 0
-@export_storage var baked_source_root: NodePath
 
 @export_group("SWE Simulation")
 ## Runtime GPU shallow-layer solver. Disabling resets to static initialization; editor stays static.
@@ -48,6 +43,13 @@ const FogShader = preload("res://addons/heightfield_fog/heightfield_fog.gdshader
 ## Instantaneous radial velocity increment at takeoff, not a density eraser. Zero disables.
 @export_range(0.0, 4.0, 0.1, "suffix:m/s") var jump_speed: float = 1.8
 
+# Derived per-instance cache. Never stored in PackedScene or resource files.
+var height_map: Texture2D
+var baked_transform := Transform3D.IDENTITY
+var baked_size := Vector3.ZERO
+var baked_resolution: int = 0
+var baked_source_root: NodePath
+
 var _solver: HeightfieldFogSWE
 var _volume: FogVolume
 var _material: ShaderMaterial
@@ -55,6 +57,23 @@ var _was_current: bool = false
 var _initialization_key: Array = []
 var _maximum_thickness: float = 0.0
 var _thickness_texture: ImageTexture
+
+func _enter_tree() -> void:
+	height_map = null
+	baked_size = Vector3.ZERO
+	_initialization_key.clear()
+	_bake_on_entry.call_deferred()
+
+func _bake_on_entry() -> void:
+	if not is_inside_tree():
+		return
+	# Parent _ready() may build terrain; CSG needs a frame to expose its final mesh.
+	for i in 2:
+		await get_tree().process_frame
+		if not is_inside_tree():
+			return
+	if not is_bake_current():
+		bake()
 
 func _ready() -> void:
 	_volume = FogVolume.new()
@@ -77,10 +96,10 @@ func _process(delta: float) -> void:
 		return
 	if initialization == null:
 		initialization = Initialization.new()
-	var key := [initialization, initialization.parameters(), height_map, size, swe_enabled]
+	var key := [initialization, initialization.parameters(), height_map, size, global_transform, swe_enabled]
 	if key != _initialization_key:
 		_stop_solver()
-		var image := initialization.create_thickness(height_map.get_image(), Vector2(size.x, size.z))
+		var image := initialization.create_thickness(height_map.get_image(), Vector2(size.x, size.z), global_transform)
 		_maximum_thickness = 0.0
 		for value in image.get_data().to_float32_array():
 			_maximum_thickness = maxf(_maximum_thickness, value)
@@ -94,8 +113,7 @@ func _process(delta: float) -> void:
 	if _solver != null and _solver.ready and not swe_paused:
 		_solver.advance(delta,clampf(swe_gravity,0.05,9.81),clampf(swe_drag,0.0,4.0),clampf(jump_radius,0.2,6.0),clampf(jump_speed,0.0,4.0))
 	# Guard band for thin-layer filtering; the bake ceiling is not a fog ceiling.
-	var top_margin := clampf(initialization.top_variation, 0.0, 2.0) if initialization.natural_mist_enabled else 0.0
-	var margin := _maximum_thickness + top_margin + maxf(vertical_filter, 0.002)
+	var margin := _maximum_thickness + maxf(vertical_filter, 0.002)
 	if _solver != null:
 		margin = maxf(margin,clampf(swe_render_height,1.0,32.0))
 	_volume.size = size + Vector3(0, 2.0 * margin, 0)
@@ -113,24 +131,23 @@ func _process(delta: float) -> void:
 	_material.set_shader_parameter("mist_time", Time.get_ticks_msec() * 0.001)
 	if initialization.natural_mist_enabled:
 		var angle := deg_to_rad(initialization.wind_direction)
-		_material.set_shader_parameter("horizontal_top", initialization.horizontal_top)
-		_material.set_shader_parameter("baseline_height", initialization.base_height + initialization.height_offset)
-		_material.set_shader_parameter("top_variation", top_margin)
-		_material.set_shader_parameter("top_scale", clampf(initialization.top_scale, 4.0, 80.0))
+		_material.set_shader_parameter("noise_map", initialization.noise_texture())
+		_material.set_shader_parameter("noise_uv_scale", clampf(initialization.noise_frequency, 0.001, 8.0) / Initialization.NOISE_PERIOD)
+		_material.set_shader_parameter("coverage", clampf(initialization.coverage, 0.0, 1.0))
+		_material.set_shader_parameter("coverage_softness", clampf(initialization.coverage_softness, 0.01, 0.5))
 		_material.set_shader_parameter("top_softness", clampf(initialization.top_softness, 0.1, 1.0))
 		_material.set_shader_parameter("detail_strength", clampf(initialization.detail_strength, 0.0, 0.8))
-		_material.set_shader_parameter("detail_scale", clampf(initialization.detail_scale, 1.0, 16.0))
+		_material.set_shader_parameter("detail_scale", clampf(initialization.detail_scale, 0.25, 8.0))
 		_material.set_shader_parameter("wind_stretch", clampf(initialization.wind_stretch, 1.0, 8.0))
 		_material.set_shader_parameter("wind_direction", Vector2(cos(angle), sin(angle)))
 		_material.set_shader_parameter("wind_speed", clampf(initialization.wind_speed, 0.0, 1.0))
-		_material.set_shader_parameter("noise_seed", float(initialization.noise_seed % 65536))
 		_material.set_shader_parameter("noise_offset", initialization.noise_offset)
 
-## Inject momentum into this box's SWE state; no visual fallback if simulation is off.
-func disturb_mist(feet_position: Vector3) -> void:
-	if _solver == null or swe_paused or not feet_position.is_finite():
+## Signed radial impulse: negative gathers, positive spreads. No static visual fallback.
+func disturb_mist(feet_position: Vector3, radial_strength: float = 1.0) -> void:
+	if _solver == null or swe_paused or not feet_position.is_finite() or not is_finite(radial_strength):
 		return
-	_solver.impulse(to_local(feet_position))
+	_solver.impulse(to_local(feet_position), radial_strength)
 
 ## Last completed GPU batch, not CPU wall time. -1 means no timestamp available.
 func swe_metrics() -> Dictionary:
@@ -153,7 +170,6 @@ func _on_solver_initialized(success: bool) -> void:
 		return
 	if success:
 		_material.set_shader_parameter("thickness_map", _solver.texture)
-		_material.set_shader_parameter("swe_active", true)
 	else:
 		push_error("Heightfield Fog SWE requires a working Forward+ RenderingDevice; showing static initialization")
 
@@ -162,7 +178,6 @@ func _stop_solver() -> void:
 		_solver.close()
 		_solver = null
 	if is_instance_valid(_material):
-		_material.set_shader_parameter("swe_active", false)
 		_material.set_shader_parameter("thickness_map", _thickness_texture)
 
 func _exit_tree() -> void:
@@ -189,7 +204,7 @@ func _get_configuration_warnings() -> PackedStringArray:
 	if not _supported_transform():
 		warnings.append("Only Y rotation and unit world scale are supported; resize using Size/gizmo handles.")
 	if not is_bake_current():
-		warnings.append("Heightfield missing or box changed: click Bake local heightfield, then save scene.")
+		warnings.append("Heightfield bakes in memory on scene entry. After editing, click Bake local heightfield.")
 	return warnings
 
 func bake() -> void:
@@ -212,6 +227,4 @@ func bake() -> void:
 	baked_resolution = resolution
 	baked_source_root = source_root
 	update_configuration_warnings()
-	if Engine.is_editor_hint():
-		EditorInterface.mark_scene_as_unsaved()
 	print("Heightfield Fog baked: ", get_path(), " ", resolution, "²")
