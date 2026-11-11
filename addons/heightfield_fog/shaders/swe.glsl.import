@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://cdolj71odiscr"
+path="res://.godot/imported/swe.glsl-e4772e93dc06ffc79d0963e981dfef87.res"
+
+[deps]
+
+source_file="res://addons/heightfield_fog/shaders/swe.glsl"
+dest_files=["res://.godot/imported/swe.glsl-e4772e93dc06ffc79d0963e981dfef87.res"]
+
+[params]
+

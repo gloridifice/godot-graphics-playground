@@ -1,0 +1,67 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://addons/heightfield_fog/heightfield_fog_box.gd" id="1"]
+[ext_resource type="Script" path="res://addons/heightfield_fog/fixtures/stacked_floors.gd" id="2"]
+[ext_resource type="Resource" path="res://addons/heightfield_fog/presets/low_mist.tres" id="3"]
+[ext_resource type="Resource" path="res://addons/heightfield_fog/presets/soft_layer.tres" id="4"]
+[sub_resource type="Environment" id="Environment"]
+background_mode = 1
+background_color = Color(0.09, 0.12, 0.18, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.7, 0.8, 1, 1)
+ambient_light_energy = 0.6
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.0
+volumetric_fog_length = 40.0
+volumetric_fog_temporal_reprojection_enabled = false
+[sub_resource type="StandardMaterial3D" id="GroundMaterial"]
+albedo_color = Color(0.23, 0.3, 0.17, 1)
+[sub_resource type="BoxMesh" id="Ground"]
+material = SubResource("GroundMaterial")
+size = Vector3(18, 0.2, 18)
+[sub_resource type="StandardMaterial3D" id="UpperMaterial"]
+albedo_color = Color(0.3, 0.27, 0.2, 1)
+[sub_resource type="BoxMesh" id="Upper"]
+material = SubResource("UpperMaterial")
+size = Vector3(7, 0.2, 7)
+[sub_resource type="BoxMesh" id="Pillar"]
+material = SubResource("UpperMaterial")
+size = Vector3(0.4, 3, 0.4)
+[sub_resource type="CameraAttributesPractical" id="CameraAttributes"]
+
+[node name="HeightfieldFogDemo" type="Node3D"]
+script = ExtResource("2")
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment")
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-55, -30, 0)
+light_energy = 1.4
+shadow_enabled = true
+[node name="Ground" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.1, 0)
+mesh = SubResource("Ground")
+[node name="UpperFloor" type="MeshInstance3D" parent="."]
+position = Vector3(2, 2.9, 0)
+mesh = SubResource("Upper")
+[node name="Pillar" type="MeshInstance3D" parent="."]
+position = Vector3(2, 1.5, 0)
+mesh = SubResource("Pillar")
+[node name="LowerFog" type="Node3D" parent="."]
+position = Vector3(0, -0.2, 0)
+rotation_degrees = Vector3(0, 22, 0)
+script = ExtResource("1")
+size = Vector3(13, 2.5, 13)
+edge_fade = 1.5
+initialization = ExtResource("3")
+[node name="UpperFog" type="Node3D" parent="."]
+position = Vector3(2, 2.8, 0)
+rotation_degrees = Vector3(0, -12, 0)
+script = ExtResource("1")
+size = Vector3(6, 2, 6)
+edge_fade = 1.0
+initialization = ExtResource("4")
+[node name="Camera" type="Camera3D" parent="."]
+position = Vector3(13, 12, 17)
+rotation_degrees = Vector3(-29, 37, 0)
+current = true
+attributes = SubResource("CameraAttributes")

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="HeightfieldFogInitialization" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/heightfield_fog/initialization.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+base_height = 2.55
+horizontal_top = true
+noise_seed = 19
+natural_mist_enabled = true
+top_variation = 0.25
+top_scale = 20.0
+top_softness = 0.7
+detail_strength = 0.35
+detail_scale = 3.0
+wind_stretch = 4.5
+wind_direction = 25.0
+wind_speed = 0.12

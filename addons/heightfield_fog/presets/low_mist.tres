@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="HeightfieldFogInitialization" format=3 uid="uid://bolrorei3ks8n"]
+
+[ext_resource type="Script" uid="uid://25coo06v615h" path="res://addons/heightfield_fog/initialization.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+noise_amplitude = 0.6
+noise_frequency = 0.789

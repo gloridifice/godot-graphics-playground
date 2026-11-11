@@ -1,0 +1,38 @@
+# Godot 4 缓存与生成的 Android 构建目录
+.godot/
+/android/
+
+# 导出产物（export_presets.cfg 可提交，凭据不可提交）
+/build/
+/dist/
+/exports/
+export_credentials.cfg
+*.keystore
+*.jks
+
+# Godot 自动生成的翻译文件
+*.translation
+
+# IDE 本机配置与 .NET 构建缓存
+.idea/
+.vs/
+**/bin/
+**/obj/
+*.csproj.user
+*.suo
+
+# 编辑器临时文件
+*.tmp
+*.swp
+*.swo
+*~
+
+# 操作系统杂项
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# 本地搜索索引
+.tgrep/
+
+# 保留资源元数据：不要忽略 *.uid 和 *.import
