@@ -1,8 +1,10 @@
 # 资源驱动的贴地薄雾
 
+本文的初态公式、烘焙生命周期和外观合约适用于两种模拟后端。`simulation_method` 默认 SWE，另可选 Stable Fluids；原 `swe_enabled`／`swe_editor_enabled`／`swe_paused` 名称兼容保留，控制当前后端。下文有关压力、堆积和 SWE 风输送的描述专指 SWE；Stable Fluids 的被动基础厚度、临时高度乘数、局部材质输送和开放回溯规则见 [独立合约](heightfield-stable-fluid.md)。两后端切换重建同一资源初态、保留预览密度起点，不迁移动态状态。
+
 ## 唯一生成入口
 
-`HeightfieldFogInitialization` 是可保存、共享和 Make Unique 的 `.tres` 资源。普通模式、Natural Mist 静态预览、SWE 初态都调用 `create_thickness(terrain, extent, box_transform)`；Natural Mist 不得绕过 Noise 参数，也不得在显示 shader 中重新构造另一套高度。SWE 上风边界在计算 shader 中复用同一资源的高度公式及噪波信号，连续生成新厚度，不引入第二套噪波参数。
+`HeightfieldFogInitialization` 是可保存、共享和 Make Unique 的 `.tres` 资源。普通模式、Natural Mist 静态预览、SWE 与 Stable Fluids 初态都调用 `create_thickness(terrain, extent, box_transform)`；Natural Mist 不得绕过 Noise 参数，也不得在显示 shader 中重新构造另一套高度。SWE 上风边界在计算 shader 中复用同一资源的高度公式及噪波信号，连续生成新厚度，不引入第二套噪波参数。
 
 每个有效承载格的初态厚度：
 
@@ -10,7 +12,7 @@
 2. Horizontal Top 开启时 `h = max(top - ground, 0)`，否则 `h = max(top, 0)`。所有高度均相对盒底。
 3. Max Thickness 大于零时 `h = min(h, max_thickness)`；零表示不限。先减地形再裁零／限厚，高于雾顶的岩石和无承载格不因此获得雾层。
 
-Max Thickness 限制**初始及上风边界新补入**的贴地厚度，不是已有 SWE 状态的质量裁切或显示截断。模拟可继续向低处输送、堆积，不能承诺长期保持初始形状。关闭 SWE 可保留设计厚度；这时没有起跳响应。
+Max Thickness 限制**初始及上风边界新补入**的贴地厚度，不是已有 SWE 状态的质量裁切或显示截断，也不裁切 Stable Fluids 高度增益后的厚度。模拟可继续向低处输送、堆积，不能承诺长期保持初始形状。关闭 SWE 可保留设计厚度；这时没有起跳响应。
 
 ## 高度场生命周期
 
@@ -28,9 +30,9 @@ Max Thickness 限制**初始及上风边界新补入**的贴地厚度，不是�
 
 ## 自然模式显示
 
-shader 始终读取初始厚度纹理或 SWE 的 Texture2DRD 输出。沿地形上方的薄层计算下部连续、顶部 smoothstep 衰减的密度，并对竖向过滤区间做解析积分平均。盒侧边渐出作用于厚度，不抬高地形；FogVolume 预留完整初态厚度和过滤余量。
+shader 始终读取初始厚度纹理或所选求解器的 Texture2DRD 输出。Stable Fluids 另输出局部流场输送的世界反向材质位移，用于 Coverage／密度细节，并替代全局 GPU 风位移，不能双加；零步初始化时位移为零，切换保留相同显示起点。沿地形上方的薄层计算下部连续、顶部 smoothstep 衰减的密度，并对竖向过滤区间做解析积分平均。盒侧边渐出作用于厚度，不抬高地形；FogVolume 预留完整初态厚度和过滤余量。
 
-显示密度从同一噪波纹理采样。Detail Scale 是相对高度噪波的尺寸倍率，1 表示相同尺度。未启用 SWE 时，按节点处理帧的 delta 积分世界风速来平移**密度**采样坐标，不使用进程启动时间、不平移静态厚度；SWE Paused 同样冻结该预览偏移。启用 SWE 时保留当前预览密度偏移作为固定显示起点，异步 GPU 初始化期间也不继续漂移，随后仅叠加 GPU 积分的输送偏移，因此零步推进时切换前后画面一致。Wind Speed 控制真实厚度及扰动输送，上风补雾、下风排雾；边界用资源的同一高度公式和无缝噪波连续生成，密度显示与边界共享 GPU 积分的输送偏移，不再另叠一层持续运行的时间漂移。关闭 SWE 清除输送偏移，恢复该固定显示起点及资源初始厚度。显式 Reset SWE State、形状参数变化或重新进入场景会同时清零预览密度偏移。暂停同时冻结模拟和密度风偏移。详见 [SWE 风输送合约](heightfield-swe.md#风输送与开放边界)。
+显示密度从同一噪波纹理采样。Detail Scale 是相对高度噪波的尺寸倍率，1 表示相同尺度。未启用 SWE 时，按节点处理帧的 delta 积分世界风速来平移**密度**采样坐标，不使用进程启动时间、不平移静态厚度；SWE Paused 同样冻结该预览偏移。启用 SWE 时保留当前预览密度偏移作为固定显示起点，异步 GPU 初始化期间也不继续漂移，随后仅叠加 GPU 积分的输送偏移，因此零步推进时切换前后画面一致。Wind Speed 控制真实厚度及扰动输送，上风补雾、下风排雾；边界用资源的同一高度公式和无缝噪波连续生成，密度显示与边界共享 GPU 积分的输送偏移，不再另叠一层持续运行的时间漂移。关闭 SWE 清除输送偏移，恢复该固定显示起点及资源初始厚度。显式 Reset simulation state、形状参数变化或重新进入场景会同时清零预览密度偏移。暂停同时冻结模拟和密度风偏移。详见 [SWE 风输送合约](heightfield-swe.md#风输送与开放边界)。
 
 Coverage=0 时没有可见雾；Coverage=1 时连续覆盖；阈值为 `lerp(1 + Coverage Softness, -Coverage Softness, Coverage)`，在阈值 ±Coverage Softness 间做 smoothstep 过渡，端点无突变。Coverage 是艺术控制量，不是实际可见面积百分比。Detail Strength 再对层内密度作有限调制；浓度与覆盖率均不改动 SWE 质量。
 

@@ -2,7 +2,17 @@
 
 用 Godot 4.7.2 打开项目，按 **F5** 启动 `scenes/fog_playground.tscn`：默认自由鼠标，按 **F** 进入／退出控制，**Esc** 或失焦释放。WASD 移动、Shift 跑步、空格跳跃；接地行走推开前方／两侧雾气并拖出尾流，起跳脚下汇聚，落地向外扩散，均作用于真实 SWE 状态。
 
-森林示例仍可打开 `addons/heightfield_fog/demo.tscn` 按 **F6**。
+运行中按 **F2** 在 SWE / Stable Fluids 间切换，左下角显示当前后端。切换会将全部雾盒重置到同一资源初态。Stable Fluids 使用二维不可压空气与独立近地径向交互驱动采样坐标，适合观察漂移、尾流和起跳／落地对噪波的向内／向外搬运。基础厚度沿轨迹保留来源值；起跳挑高、落地压低由独立可恢复的高度乘数实现，不依赖 SWE 式水平压缩增厚。要直接启动新版：
+
+```powershell
+& G:\Tools\Godot_mono_v4.7.2\godot.exe --path . -- --stable-fluids
+```
+
+Inspector 的 **Simulation / Simulation Method** 可逐盒选择。**SWE Enabled / SWE Editor Enabled / SWE Paused** 为保存兼容保留名称，现在控制所选后端；**Reset simulation state** 重置当前模式。新版的 **Stable Pressure Iterations**（默认 48）和 **Stable Drag**（默认 0.45 s⁻¹）实时生效；SWE 的重力、阈值、阶数、Drag 不作用于新版。两种模式均不是三维空气模拟；新版不通过水平压缩堆高；高度从不可变初态 `h₀` 按回溯坐标重建，不再逐 tick 插值高度，纯风噪波不会持续磨平。入口雾使用独立参考坐标和入口承载高度从资源公式重建。跳跃／落地径向分量不受空气压力投影消除，只参与坐标输送，随流传播并受 Stable Drag 衰减；不会定时复原图案。合成速度不宣称严格二维无散，不以水平压缩补偿厚度。坐标场长期仍有插值误差／拉伸，且不严格守恒总雾量。详见 [Stable Fluids 合约](../specs/heightfield-stable-fluid.md)。下文汇聚／扩散及重力调参专指默认 SWE。
+
+Stable Fluids 的高度乘数 `G` 直接编码于 `[0,2]`，最终厚度乘 `G`，`1` 为中性。**Stable Takeoff Height Gain** 默认 `1.75`，**Stable Landing Height Gain** 默认 `0.25`；都设为 `1` 可禁用新的高度响应，保留平面扰流。**Stable Height Gain Half Life** 默认 `0.8 s`，控制增益向 `1` 恢复，与速度阻尼独立。增益随风和局部流动搬运，只恢复乘数，不复位原始噪波或坐标；零基础厚度仍为零。暂停冻结恢复，重置／切换回 `1`。参数实时生效，无须重新烘焙。
+
+森林示例仍可打开 `addons/heightfield_fog/demo.tscn` 按 **F6**，可通过 Inspector 选择后端，未连接主场景 F2 快捷键。
 
 ```powershell
 & G:\Tools\Godot_mono_v4.7.2\godot.exe --path .
@@ -14,7 +24,7 @@
 
 启动时自动烘焙两个旋转雾盒：`ClearingMist` 覆盖林间空地，`DeepForestMist` 覆盖后方林地，共享自然薄雾预设 `forest_mist.tres`。低洼地形积雾、高处岩石露出；运行时使用每盒独立 GPU SWE 推进厚度与动量，自然密度细节沿世界风向缓慢漂移，保持时间重投影。烘焙来源为 `Landscape/Terrain` 的地面及岩石；树冠和倒木不作为承载面。倒木有角色碰撞，但不是雾动力障碍。
 
-游戏和测试场景默认**不锁鼠标，光标保持可见**。按 **F** 才锁定并隐藏鼠标、进入控制；之后 **WASD 行走、鼠标环绕、空格跳跃**。**Esc** 释放鼠标，单击画面或切回窗口不会自动锁定，需要再次按 F。移动方向跟随相机，斜向不加速；释放鼠标或失焦后停止接受移动输入。角色在土路入口落地，正常重力与贴坡；地面、岩石、树干、倒木有物理碰撞，地图边缘有防跌落边界。相机由 Phantom Camera 跟随并避让这些碰撞体，不为树冠／细枝建立碰撞。在雾里按空格起跳会向脚边 SWE 场注入径向动量，由求解器输送厚度、形成堆积与波动，不再按固定时间恢复；行走和落地不触发。可在雾盒 Interaction 分组调整 Jump Radius（m）和 Jump Speed（m/s）。SWE Simulation 分组可暂停、重置、调整约化重力与阻尼；暂停保留状态，关闭模拟回到静态初态且不响应跳跃。原上下层分离场景保留为 `addons/heightfield_fog/fixtures/stacked_floors.tscn`，用于烘焙测试。
+游戏和测试场景默认**不锁鼠标，光标保持可见**。按 **F** 才锁定并隐藏鼠标、进入控制；之后 **WASD 行走、鼠标环绕、空格跳跃**。**Esc** 释放鼠标，单击画面或切回窗口不会自动锁定，需要再次按 F。移动方向跟随相机，斜向不加速；释放鼠标或失焦后停止接受移动输入。角色在土路入口落地，正常重力与贴坡；地面、岩石、树干、倒木有物理碰撞，地图边缘有防跌落边界。相机由 Phantom Camera 跟随并避让这些碰撞体，不为树冠／细枝建立碰撞。在雾里按空格起跳会向脚边 SWE 场注入径向动量，由求解器输送厚度、形成堆积与波动，不再按固定时间恢复；行走和落地不触发。可在雾盒 Interaction 分组调整 Jump Radius（m）和 Jump Speed（m/s）。Simulation 分组可暂停、重置，SWE Simulation 分组调整约化重力与阻尼；暂停保留状态，关闭模拟回到静态初态且不响应跳跃。原上下层分离场景保留为 `addons/heightfield_fog/fixtures/stacked_floors.tscn`，用于烘焙测试。
 
 ## CSG 雾实验场
 
@@ -22,7 +32,7 @@
 
 `FogFields` 下三个节点可独立移动、调整 Size、Initialization 和外观；当前均使用贴承载面的薄层，也可开启 Horizontal Top 改用水平雾顶。三片雾均开启 SWE，并有自然密度漂移。真实接地起跳会向脚下施加向内动量，使雾汇聚；落地施加向外动量，使雾扩散。初次出生接地、二段空中跳跃不施加地面冲量；高差 1.5 m 外的雾不受影响。根节点 **Player Mist Interaction** 的 **Takeoff Pull**（默认 0.8）与 **Landing Push**（默认 1）调整两种强度，设为 0 可分别关闭；作用范围及速度由各盒 **Jump Radius / Jump Speed** 控制。不额外生成或删除雾量。
 
-在雾盒的 **SWE Simulation** 分组开启 **SWE Editor Enabled**，可直接在编辑器预演重力、风输送及边界补雾；开启与关闭都会重置场，关闭回到静态初态。默认关闭，与运行时 **SWE Enabled** 独立；**SWE Paused** 可暂停并保留预览状态。若需减轻风输送导致的细节模糊，可开启 **SWE Second Order** 试用 MC 限制器的二阶空间重建；默认关闭，切换时重置物理场、保留噪波显示相位，编辑器与运行时均适用，GPU 成本更高。
+在雾盒的 **Simulation** 分组开启 **SWE Editor Enabled**，可直接在编辑器预演重力、风输送及边界补雾；开启与关闭都会重置场，关闭回到静态初态。默认关闭，与运行时 **SWE Enabled** 独立；**SWE Paused** 可暂停并保留预览状态。若需减轻风输送导致的细节模糊，可开启 **SWE Second Order** 试用 MC 限制器的二阶空间重建；默认关闭，切换时重置物理场、保留噪波显示相位，编辑器与运行时均适用，GPU 成本更高。
 
 每次在编辑器打开场景或运行场景，都会自动构建内存高度图，不会将烘焙数据保存到 `.tscn` 或 `.res`。修改 CSG 或雾盒布局后，选择 **FogPlayground 根节点**，点击 Inspector 的 **Bake all playground fog** 更新预览；只需保存布局／参数修改，不需保存烘焙结果。该按钮先刷新 CSG 的烘焙网格再重烘焙全部雾盒；不要仅依赖单盒按钮更新已编辑的 CSG。派生 `_FogCSGSurface` 无渲染层、不投影、不生成碰撞，也不随场景保存，原有 CSG 和碰撞保持不变。
 
@@ -74,12 +84,15 @@
 ```powershell
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --headless --path . --script res://addons/heightfield_fog/bake_test.gd
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --headless --path . --script res://addons/heightfield_fog/initialization_test.gd
+# Stable Fluids：真实 GPU 数值、开放回溯与主场景 F2／暂停／重置。
+& G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://addons/heightfield_fog/stable_fluid_test.gd --max-fps 120
 # SWE 真实 GPU 数值验证。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://addons/heightfield_fog/swe_test.gd --max-fps 120
 # 自然薄雾及 SWE 输出纹理的真实 GPU 行为验证。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://addons/heightfield_fog/natural_mist_test.gd --max-fps 60
-# 主场景：真实控制器起跳汇聚／落地扩散 GPU 状态、质量与 F／Esc／失焦输入控制。
+# 主场景：同一真实控制器，SWE 验证动量／质量，Stable Fluids 验证径向速度／坐标搬运及起跳升高／落地压低。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://tests/fog_playground_jump_test.gd --max-fps 60
+& G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://tests/fog_playground_jump_test.gd --max-fps 60 -- --stable-fluids
 # 森林：需要有焦点的图形窗口，验证默认自由鼠标、物理 F／Esc、行走、跳跃和边界。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://tests/forest_walk_test.gd --max-fps 60
 # 有限帧真实 GPU 冒烟运行，使用当前主场景。

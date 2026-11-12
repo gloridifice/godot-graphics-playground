@@ -3,6 +3,7 @@ extends SceneTree
 # Real main scene, accepted controller input, contacts, and GPU state. No mocked events.
 var failures := 0
 var _report: Dictionary = {}
+var _stable := false
 
 func _initialize() -> void:
 	_run.call_deferred()
@@ -10,9 +11,11 @@ func _initialize() -> void:
 func _run() -> void:
 	var main_path: String = ProjectSettings.get_setting("application/run/main_scene")
 	var scene := (load(main_path) as PackedScene).instantiate() as Node3D
-	# Isolate local interaction conservation from wind sources and background edge drainage.
+	_stable = "--stable-fluids" in OS.get_cmdline_user_args()
+	# Isolate local interaction from wind sources and background edge drainage.
 	for field in scene.get_node("FogFields").get_children():
 		if field is HeightfieldFogBox:
+			field.simulation_method = HeightfieldFogBox.SimulationMethod.STABLE_FLUIDS if _stable else HeightfieldFogBox.SimulationMethod.SWE
 			field.initialization.wind_speed = 0.0
 			if field.name == &"SpawnPlatformMist":
 				# Suppress resting pressure spilling over distant platform edges.
@@ -34,7 +37,7 @@ func _run() -> void:
 		await process_frame
 		if player.is_on_floor() and box.swe_metrics().ready:
 			break
-	if not _check(player.is_on_floor() and box.swe_metrics().ready, "spawn settles on CSG and its mist has a real SWE solver"):
+	if not _check(player.is_on_floor() and box.swe_metrics().ready, "spawn settles on CSG and its mist has the selected real GPU solver"):
 		quit(1)
 		return
 	await _physics_steps(12)
@@ -69,8 +72,12 @@ func _run() -> void:
 	var gathered := await _snapshot(box)
 	_check(player.position.y > start.y+0.1 and events == ["takeoff"], "an accepted grounded jump emits exactly one takeoff")
 	var inward := _radial_momentum(box,gathered,feet)
-	_check(inward < -0.01, "takeoff injects inward momentum into the actual GPU state")
-	_check(_center_height(box,gathered,feet)>_center_height(box,before,feet)+0.005, "takeoff physically gathers layer thickness beneath the character")
+	_check(inward < -0.01, "takeoff injects inward transport into the actual GPU state")
+	if _stable:
+		_check(_map_change(box,before,gathered,feet)>0.01,"real takeoff moves the h0 reference map")
+		_check(_center_height(box,gathered,feet)>_center_height(box,before,feet)+0.005,"Stable Fluids takeoff lifts the actual output height with a temporary gain")
+	else:
+		_check(_center_height(box,gathered,feet)>_center_height(box,before,feet)+0.005, "takeoff physically gathers layer thickness beneath the character")
 	Input.action_release("play_char_jump_action")
 	await _key(KEY_F)
 	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "F also exits control while airborne")
@@ -82,8 +89,12 @@ func _run() -> void:
 	var landed := await _snapshot(box)
 	_check(player.is_on_floor() and events == ["takeoff", "landed"], "released controls still fall and emit exactly one real landing")
 	var outward := _radial_momentum(box,landed,feet)
-	_check(outward > 0.01, "landing injects outward GPU momentum")
-	_check(absf(_mass(landed)-_mass(before))/_mass(before)<0.001 and landed.faults==0, "both interactions transport mass without creating/deleting fog")
+	_check(outward > 0.01, "landing injects outward GPU transport")
+	if _stable:
+		_check(_map_change(box,gathered,landed,feet)>0.01 and landed.faults==0,"real landing continues reference transport without numerical faults")
+		_check(_center_height(box,landed,feet)<_center_height(box,before,feet)-0.005,"Stable Fluids landing depresses the actual output height despite the earlier lift")
+	else:
+		_check(absf(_mass(landed)-_mass(before))/_mass(before)<0.001 and landed.faults==0, "both interactions transport mass without creating/deleting fog")
 	await _physics_steps(12)
 	_check(events.size()==2, "resting on the floor does not repeatedly inject impulses")
 	await _key(KEY_F)
@@ -95,7 +106,7 @@ func _run() -> void:
 	root.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_IN)
 	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "focus regain does not capture the cursor")
 	# Distinct transport risk: real collision-resolved WASD motion must reach the GPU.
-	# Reset jump waves; gravity remains suppressed to isolate walking momentum.
+	# Reset interaction state; gravity remains suppressed for the SWE walking case.
 	box.reset_swe()
 	await _physics_steps(12)
 	var walking_start := await _snapshot(box)
@@ -109,8 +120,10 @@ func _run() -> void:
 	await _physics_steps(6)
 	var resumed := await _snapshot(box)
 	var pause_error := 0.0
-	for i in resumed.state.size():
-		pause_error = maxf(pause_error,absf(resumed.state[i]-walking_start.state[i]))
+	var resumed_values: PackedFloat32Array = resumed.scalar if _stable else resumed.state
+	var starting_values: PackedFloat32Array = walking_start.scalar if _stable else walking_start.state
+	for i in resumed_values.size():
+		pause_error = maxf(pause_error,absf(resumed_values[i]-starting_values[i]))
 	_check(pause_error<0.00001,"walking while paused does not queue a delayed force on resume")
 	var walking_feet: Vector3 = player.get_feet_position()
 	await _key(KEY_F)
@@ -124,12 +137,16 @@ func _run() -> void:
 	travel.y = 0.0
 	var local_forward := box.global_basis.inverse()*travel.normalized()
 	var momentum := Vector2.ZERO
-	for i in range(0,walked.state.size(),4):
-		momentum += Vector2(walked.state[i+1],walked.state[i+2])
+	if not _stable:
+		for i in range(0,walked.state.size(),4):
+			momentum += Vector2(walked.state[i+1],walked.state[i+2])
 	_check(travel.length()>0.2 and player.is_on_floor() and events.size()==2,"accepted WASD walks on the platform without fabricating jump events")
-	_check(momentum.dot(Vector2(local_forward.x,local_forward.z))>0.1,"real player walking delivers directional momentum into the rendered SWE field")
-	_check(absf(_mass(walked)-_mass(walking_start))/_mass(walking_start)<0.001 and walked.faults==0,"scene walking redistributes existing fog without boundary loss")
-	print("Fog playground GPU: ", "PASS" if failures==0 else "FAIL", " takeoff_radial=",inward," landing_radial=",outward," walk_distance=",travel.length()," walk_momentum=",momentum)
+	if _stable:
+		_check(_map_change(box,walking_start,walked,walking_feet)>0.005 and walked.faults==0,"real walking moves the rendered Stable Fluids reference map")
+	else:
+		_check(momentum.dot(Vector2(local_forward.x,local_forward.z))>0.1,"real player walking delivers directional momentum into the rendered SWE field")
+		_check(absf(_mass(walked)-_mass(walking_start))/_mass(walking_start)<0.001 and walked.faults==0,"scene walking redistributes existing fog without boundary loss")
+	print("Fog playground GPU: ", "PASS" if failures==0 else "FAIL", " backend=","StableFluids" if _stable else "SWE"," takeoff_radial=",inward," landing_radial=",outward," walk_distance=",travel.length()," walk_momentum=",momentum)
 	scene.free()
 	await process_frame
 	quit(0 if failures==0 else 1)
@@ -170,10 +187,25 @@ func _radial_momentum(box: HeightfieldFogBox, report: Dictionary, world_feet: Ve
 			offset = offset*Vector2(box.size.x,box.size.z)-Vector2(feet.x,feet.z)
 			if offset.length()<0.25 or offset.length()>2.0:
 				continue
-			var i := (z*box.resolution+x)*4
-			result += Vector2(report.state[i+1],report.state[i+2]).dot(offset.normalized())
+			var cell := z*box.resolution+x
+			var vector := Vector2(report.velocity[cell*2],report.velocity[cell*2+1]) if _stable else Vector2(report.state[cell*4+1],report.state[cell*4+2])
+			result += vector.dot(offset.normalized())
 			cells += 1
 	return result/maxi(cells,1)
+
+func _map_change(box: HeightfieldFogBox, before: Dictionary, after: Dictionary, world_feet: Vector3) -> float:
+	var feet := box.to_local(world_feet)
+	var total := 0.0
+	var cells := 0
+	for z in box.resolution:
+		for x in box.resolution:
+			var point := ((Vector2(x,z)+Vector2.ONE*0.5)/box.resolution-Vector2.ONE*0.5)*Vector2(box.size.x,box.size.z)
+			if point.distance_to(Vector2(feet.x,feet.z))>2.5:
+				continue
+			var i := (z*box.resolution+x)*4
+			total += Vector2(after.scalar[i+1]-before.scalar[i+1],after.scalar[i+2]-before.scalar[i+2]).length()
+			cells += 1
+	return total/maxi(cells,1)
 
 func _center_height(box: HeightfieldFogBox, report: Dictionary, world_feet: Vector3) -> float:
 	var feet := box.to_local(world_feet)
@@ -184,7 +216,8 @@ func _center_height(box: HeightfieldFogBox, report: Dictionary, world_feet: Vect
 			var offset := (Vector2(x,z)+Vector2.ONE*0.5)/box.resolution-Vector2.ONE*0.5
 			offset = offset*Vector2(box.size.x,box.size.z)-Vector2(feet.x,feet.z)
 			if offset.length()<0.65:
-				total += report.state[(z*box.resolution+x)*4]
+				var values: PackedFloat32Array = report.scalar if _stable else report.state
+				total += values[(z*box.resolution+x)*4]
 				cells += 1
 	return total/maxi(cells,1)
 

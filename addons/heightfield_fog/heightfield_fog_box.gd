@@ -3,7 +3,9 @@ class_name HeightfieldFogBox
 extends Node3D
 
 const Initialization = preload("res://addons/heightfield_fog/initialization.gd")
-const Solver = preload("res://addons/heightfield_fog/swe_solver.gd")
+const SWESolver = preload("res://addons/heightfield_fog/swe_solver.gd")
+const StableFluidSolver = preload("res://addons/heightfield_fog/stable_fluid_solver.gd")
+enum SimulationMethod { SWE, STABLE_FLUIDS }
 const Baker = preload("res://addons/heightfield_fog/baker.gd")
 const FogShader = preload("res://addons/heightfield_fog/heightfield_fog.gdshader")
 
@@ -26,14 +28,29 @@ const FogShader = preload("res://addons/heightfield_fog/heightfield_fog.gdshader
 @export_range(0.0, 2.0, 0.01) var brightness: float = 0.3
 @export_range(0.002, 0.5, 0.002, "suffix:m") var vertical_filter: float = 0.1
 
-@export_group("SWE Simulation")
-## Runtime GPU shallow-layer solver. Toggling resets the runtime field.
+@export_group("Simulation")
+## Switching backends resets to the resource initial condition, without rebaking terrain.
+@export var simulation_method: SimulationMethod = SimulationMethod.SWE
+## Runtime simulation switch for BOTH backends; legacy name retained for saved scenes.
 @export var swe_enabled: bool = false
 ## Independent editor simulation. Both enabling and disabling reset the field to initialization.
 ## Does not affect runtime; disabled by default to avoid background GPU simulation while editing.
 @export var swe_editor_enabled: bool = false
 ## Freeze the current state, without resetting it. Useful for visual/performance comparison.
 @export var swe_paused: bool = false
+@export_tool_button("Reset simulation state") var reset_swe_action: Callable = reset_swe
+@export_group("Stable Fluids")
+## Fixed Jacobi budget. More iterations reduce divergence, but cost more GPU passes.
+@export_range(8, 128, 2) var stable_pressure_iterations: int = 48
+## Damps projected air and radial interaction velocity, not background wind or thickness.
+@export_range(0.0, 4.0, 0.05, "suffix:1/s") var stable_drag: float = 0.45
+## Multiplicative takeoff height target. One disables lift; two doubles base thickness.
+@export_range(1.0, 2.0, 0.05) var stable_takeoff_height_gain: float = 1.75
+## Multiplicative landing height target. One disables depression; zero clears thickness.
+@export_range(0.0, 1.0, 0.05) var stable_landing_height_gain: float = 0.25
+## Half-life of the gain's return to one, independent of velocity damping.
+@export_range(0.01, 32.0, 0.05, "suffix:s") var stable_height_gain_half_life: float = 0.8
+@export_group("SWE Simulation")
 ## Limited second-order spatial reconstruction. Off uses the original first-order flux.
 ## Switching resets the physical field, retaining the preview density phase for comparison.
 @export var swe_second_order: bool = false
@@ -46,10 +63,10 @@ const FogShader = preload("res://addons/heightfield_fog/heightfield_fog.gdshader
 @export_range(0.0, 4.0, 0.05, "suffix:1/s") var swe_drag: float = 0.45
 ## Conservative display guard for dynamic pile-up; does not clamp simulated thickness.
 @export_range(1.0, 32.0, 0.5, "suffix:m") var swe_render_height: float = 8.0
-@export_tool_button("Reset SWE state") var reset_swe_action: Callable = reset_swe
 @export_group("Interaction")
 @export_range(0.2, 6.0, 0.1, "suffix:m") var jump_radius: float = 2.5
-## Instantaneous radial velocity increment at takeoff, not a density eraser. Zero disables.
+## Instantaneous radial velocity increment, not a density eraser. Zero disables radial
+## motion; Stable Fluids height gain remains independently controlled.
 @export_range(0.0, 4.0, 0.1, "suffix:m/s") var jump_speed: float = 1.8
 
 @export_subgroup("Movement")
@@ -67,13 +84,15 @@ var baked_size := Vector3.ZERO
 var baked_resolution: int = 0
 var baked_source_root: NodePath
 
-var _solver: HeightfieldFogSWE
+# Both GPU backends implement the same lifecycle/output and interaction entry points.
+var _solver: Variant
 var _volume: FogVolume
 var _material: ShaderMaterial
 var _was_current: bool = false
 var _initialization_key: Array = []
 var _simulation_requested: bool = false
 var _second_order_requested: bool = false
+var _method_requested: int = -1
 # Static density displacement becomes the fixed visual origin when SWE takes over.
 # GPU transport then adds its own displacement, without changing this initial pattern.
 var _density_drift := Vector2.ZERO
@@ -86,6 +105,7 @@ func _enter_tree() -> void:
 	_initialization_key.clear()
 	_simulation_requested = false
 	_second_order_requested = false
+	_method_requested = -1
 	_density_drift = Vector2.ZERO
 	_bake_on_entry.call_deferred()
 
@@ -124,7 +144,8 @@ func _process(delta: float) -> void:
 	var simulate_swe := swe_editor_enabled if Engine.is_editor_hint() else swe_enabled
 	var key := [initialization, initialization.parameters(), height_map, size, global_transform]
 	var shape_changed := key != _initialization_key
-	if shape_changed or simulate_swe != _simulation_requested or swe_second_order != _second_order_requested:
+	var second_order_changed := simulation_method == SimulationMethod.SWE and swe_second_order != _second_order_requested
+	if shape_changed or simulate_swe != _simulation_requested or simulation_method != _method_requested or second_order_changed:
 		_stop_solver()
 		if shape_changed:
 			_density_drift = Vector2.ZERO
@@ -136,22 +157,31 @@ func _process(delta: float) -> void:
 		_initialization_key = key
 		_simulation_requested = simulate_swe
 		_second_order_requested = swe_second_order
+		_method_requested = simulation_method
 		_material.set_shader_parameter("thickness_map", _thickness_texture)
 		if simulate_swe:
-			_solver = Solver.new()
+			_solver = SWESolver.new() if simulation_method == SimulationMethod.SWE else StableFluidSolver.new()
 			_solver.initialized.connect(_on_solver_initialized)
-			_solver.configure(height_map.get_image(), image, Vector2(size.x,size.z), initialization.noise_texture().get_image(), swe_second_order)
+			if simulation_method == SimulationMethod.SWE:
+				_solver.configure(height_map.get_image(), image, Vector2(size.x,size.z), initialization.noise_texture().get_image(), swe_second_order)
+			else:
+				_solver.configure(height_map.get_image(), image, Vector2(size.x,size.z), initialization.noise_texture().get_image())
 	# Freeze the preview phase while SWE initializes as well as while it runs/pauses.
 	# Integrate displacement instead of multiplying process uptime by the current speed.
 	if not simulate_swe and not swe_paused and not shape_changed and initialization.natural_mist_enabled:
 		var direction := Vector2.from_angle(deg_to_rad(initialization.wind_direction))
 		_density_drift += direction * clampf(initialization.wind_speed, 0.0, 1.0) * delta
 	if _solver != null and _solver.ready and not swe_paused:
-		_solver.advance(delta,clampf(swe_gravity,0.05,9.81),clampf(swe_drag,0.0,4.0),clampf(jump_radius,0.2,6.0),clampf(jump_speed,0.0,4.0),clampf(swe_gravity_threshold,0.0,8.0),initialization.wind_parameters(global_transform))
+		if simulation_method == SimulationMethod.SWE:
+			_solver.advance(delta,clampf(swe_gravity,0.05,9.81),clampf(swe_drag,0.0,4.0),clampf(jump_radius,0.2,6.0),clampf(jump_speed,0.0,4.0),clampf(swe_gravity_threshold,0.0,8.0),initialization.wind_parameters(global_transform))
+		else:
+			_solver.advance(delta,clampf(stable_drag,0.0,4.0),clampf(jump_radius,0.2,6.0),clampf(jump_speed,0.0,4.0),stable_pressure_iterations,initialization.wind_parameters(global_transform),Vector3(stable_takeoff_height_gain,stable_landing_height_gain,stable_height_gain_half_life))
 	# Guard band for thin-layer filtering; the bake ceiling is not a fog ceiling.
 	var margin := _maximum_thickness + maxf(vertical_filter, 0.002)
 	if _solver != null:
 		margin = maxf(margin,clampf(swe_render_height,1.0,32.0))
+		if simulation_method == SimulationMethod.STABLE_FLUIDS:
+			margin = maxf(margin,2.0*_maximum_thickness+maxf(vertical_filter,0.002))
 	_volume.size = size + Vector3(0, 2.0 * margin, 0)
 	_volume.position = Vector3(0, size.y * 0.5, 0)
 	_material.set_shader_parameter("world_to_box", global_transform.affine_inverse())
@@ -178,7 +208,8 @@ func _process(delta: float) -> void:
 		_material.set_shader_parameter("wind_direction", Vector2(cos(angle), sin(angle)))
 		_material.set_shader_parameter("noise_offset", initialization.noise_offset)
 
-## Signed radial impulse: negative gathers, positive spreads. No static visual fallback.
+## Signed impulse: negative gathers/lifts, positive spreads/depresses in Stable Fluids.
+## SWE keeps its original momentum-only response. No static visual fallback.
 func disturb_mist(feet_position: Vector3, radial_strength: float = 1.0) -> void:
 	if _solver == null or swe_paused or not feet_position.is_finite() or not is_finite(radial_strength):
 		return
@@ -214,14 +245,18 @@ func reset_swe() -> void:
 	_initialization_key.clear()
 
 func _on_solver_initialized(success: bool) -> void:
-	if _solver == null or not is_instance_valid(_material):
+	# A deferred completion may arrive after a method edit but before _process rebuilds it.
+	if _solver == null or _method_requested != simulation_method or not is_instance_valid(_material):
 		return
 	if success:
 		_material.set_shader_parameter("thickness_map", _solver.texture)
 		_material.set_shader_parameter("wind_phase_map", _solver.wind_phase_texture)
 		_material.set_shader_parameter("simulated_wind", true)
+		if simulation_method == SimulationMethod.STABLE_FLUIDS:
+			_material.set_shader_parameter("flow_displacement_map", _solver.flow_displacement_texture)
+			_material.set_shader_parameter("simulated_flow", true)
 	else:
-		push_error("Heightfield Fog SWE requires a working Forward+ RenderingDevice; showing static initialization")
+		push_error("Heightfield Fog simulation requires a working Forward+ RenderingDevice; showing static initialization")
 
 func _stop_solver() -> void:
 	if _solver != null:
@@ -229,6 +264,8 @@ func _stop_solver() -> void:
 		_solver = null
 	if is_instance_valid(_material):
 		_material.set_shader_parameter("simulated_wind", false)
+		_material.set_shader_parameter("simulated_flow", false)
+		_material.set_shader_parameter("flow_displacement_map", null)
 		_material.set_shader_parameter("wind_phase_map", null)
 		_material.set_shader_parameter("thickness_map", _thickness_texture)
 
