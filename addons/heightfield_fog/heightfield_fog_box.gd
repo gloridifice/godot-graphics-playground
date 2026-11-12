@@ -27,12 +27,21 @@ const FogShader = preload("res://addons/heightfield_fog/heightfield_fog.gdshader
 @export_range(0.002, 0.5, 0.002, "suffix:m") var vertical_filter: float = 0.1
 
 @export_group("SWE Simulation")
-## Runtime GPU shallow-layer solver. Disabling resets to static initialization; editor stays static.
+## Runtime GPU shallow-layer solver. Toggling resets the runtime field.
 @export var swe_enabled: bool = false
+## Independent editor simulation. Both enabling and disabling reset the field to initialization.
+## Does not affect runtime; disabled by default to avoid background GPU simulation while editing.
+@export var swe_editor_enabled: bool = false
 ## Freeze the current state, without resetting it. Useful for visual/performance comparison.
 @export var swe_paused: bool = false
+## Limited second-order spatial reconstruction. Off uses the original first-order flux.
+## Switching resets the physical field, retaining the preview density phase for comparison.
+@export var swe_second_order: bool = false
 ## Reduced gravity for a dense mist layer, not water's 9.81 m/s².
 @export_range(0.05, 9.81, 0.05, "suffix:m/s²") var swe_gravity: float = 1.2
+## Only thickness above this ground-relative depth generates gravity pressure. Zero disables.
+## Not a thickness floor: impulses and existing momentum still transport thinner mist.
+@export_range(0.0, 8.0, 0.01, "suffix:m") var swe_gravity_threshold: float = 0.0
 ## Momentum damping rate; mass is not decayed.
 @export_range(0.0, 4.0, 0.05, "suffix:1/s") var swe_drag: float = 0.45
 ## Conservative display guard for dynamic pile-up; does not clamp simulated thickness.
@@ -42,6 +51,14 @@ const FogShader = preload("res://addons/heightfield_fog/heightfield_fog.gdshader
 @export_range(0.2, 6.0, 0.1, "suffix:m") var jump_radius: float = 2.5
 ## Instantaneous radial velocity increment at takeoff, not a density eraser. Zero disables.
 @export_range(0.0, 4.0, 0.1, "suffix:m/s") var jump_speed: float = 1.8
+
+@export_subgroup("Movement")
+## Effective near-ground body width, independent of the jump impulse radius.
+@export_range(0.2, 2.0, 0.05, "suffix:m") var movement_radius: float = 0.65
+## Time-based momentum coupling. Zero disables walking interaction.
+@export_range(0.0, 20.0, 0.5, "suffix:1/s") var movement_coupling: float = 7.0
+## Physically inspired horizontal wake pair; not a 3D turbulence model.
+@export_range(0.0, 1.0, 0.05) var movement_wake: float = 0.65
 
 # Derived per-instance cache. Never stored in PackedScene or resource files.
 var height_map: Texture2D
@@ -55,6 +72,11 @@ var _volume: FogVolume
 var _material: ShaderMaterial
 var _was_current: bool = false
 var _initialization_key: Array = []
+var _simulation_requested: bool = false
+var _second_order_requested: bool = false
+# Static density displacement becomes the fixed visual origin when SWE takes over.
+# GPU transport then adds its own displacement, without changing this initial pattern.
+var _density_drift := Vector2.ZERO
 var _maximum_thickness: float = 0.0
 var _thickness_texture: ImageTexture
 
@@ -62,6 +84,9 @@ func _enter_tree() -> void:
 	height_map = null
 	baked_size = Vector3.ZERO
 	_initialization_key.clear()
+	_simulation_requested = false
+	_second_order_requested = false
+	_density_drift = Vector2.ZERO
 	_bake_on_entry.call_deferred()
 
 func _bake_on_entry() -> void:
@@ -96,22 +121,33 @@ func _process(delta: float) -> void:
 		return
 	if initialization == null:
 		initialization = Initialization.new()
-	var key := [initialization, initialization.parameters(), height_map, size, global_transform, swe_enabled]
-	if key != _initialization_key:
+	var simulate_swe := swe_editor_enabled if Engine.is_editor_hint() else swe_enabled
+	var key := [initialization, initialization.parameters(), height_map, size, global_transform]
+	var shape_changed := key != _initialization_key
+	if shape_changed or simulate_swe != _simulation_requested or swe_second_order != _second_order_requested:
 		_stop_solver()
+		if shape_changed:
+			_density_drift = Vector2.ZERO
 		var image := initialization.create_thickness(height_map.get_image(), Vector2(size.x, size.z), global_transform)
 		_maximum_thickness = 0.0
 		for value in image.get_data().to_float32_array():
 			_maximum_thickness = maxf(_maximum_thickness, value)
 		_thickness_texture = ImageTexture.create_from_image(image)
 		_initialization_key = key
+		_simulation_requested = simulate_swe
+		_second_order_requested = swe_second_order
 		_material.set_shader_parameter("thickness_map", _thickness_texture)
-		if swe_enabled and not Engine.is_editor_hint():
+		if simulate_swe:
 			_solver = Solver.new()
 			_solver.initialized.connect(_on_solver_initialized)
-			_solver.configure(height_map.get_image(), image, Vector2(size.x,size.z))
+			_solver.configure(height_map.get_image(), image, Vector2(size.x,size.z), initialization.noise_texture().get_image(), swe_second_order)
+	# Freeze the preview phase while SWE initializes as well as while it runs/pauses.
+	# Integrate displacement instead of multiplying process uptime by the current speed.
+	if not simulate_swe and not swe_paused and not shape_changed and initialization.natural_mist_enabled:
+		var direction := Vector2.from_angle(deg_to_rad(initialization.wind_direction))
+		_density_drift += direction * clampf(initialization.wind_speed, 0.0, 1.0) * delta
 	if _solver != null and _solver.ready and not swe_paused:
-		_solver.advance(delta,clampf(swe_gravity,0.05,9.81),clampf(swe_drag,0.0,4.0),clampf(jump_radius,0.2,6.0),clampf(jump_speed,0.0,4.0))
+		_solver.advance(delta,clampf(swe_gravity,0.05,9.81),clampf(swe_drag,0.0,4.0),clampf(jump_radius,0.2,6.0),clampf(jump_speed,0.0,4.0),clampf(swe_gravity_threshold,0.0,8.0),initialization.wind_parameters(global_transform))
 	# Guard band for thin-layer filtering; the bake ceiling is not a fog ceiling.
 	var margin := _maximum_thickness + maxf(vertical_filter, 0.002)
 	if _solver != null:
@@ -128,7 +164,7 @@ func _process(delta: float) -> void:
 	_material.set_shader_parameter("brightness", brightness)
 	_material.set_shader_parameter("vertical_filter", vertical_filter)
 	_material.set_shader_parameter("natural_mist_enabled", initialization.natural_mist_enabled)
-	_material.set_shader_parameter("mist_time", Time.get_ticks_msec() * 0.001)
+	_material.set_shader_parameter("density_drift", _density_drift)
 	if initialization.natural_mist_enabled:
 		var angle := deg_to_rad(initialization.wind_direction)
 		_material.set_shader_parameter("noise_map", initialization.noise_texture())
@@ -140,7 +176,6 @@ func _process(delta: float) -> void:
 		_material.set_shader_parameter("detail_scale", clampf(initialization.detail_scale, 0.25, 8.0))
 		_material.set_shader_parameter("wind_stretch", clampf(initialization.wind_stretch, 1.0, 8.0))
 		_material.set_shader_parameter("wind_direction", Vector2(cos(angle), sin(angle)))
-		_material.set_shader_parameter("wind_speed", clampf(initialization.wind_speed, 0.0, 1.0))
 		_material.set_shader_parameter("noise_offset", initialization.noise_offset)
 
 ## Signed radial impulse: negative gathers, positive spreads. No static visual fallback.
@@ -148,6 +183,19 @@ func disturb_mist(feet_position: Vector3, radial_strength: float = 1.0) -> void:
 	if _solver == null or swe_paused or not feet_position.is_finite() or not is_finite(radial_strength):
 		return
 	_solver.impulse(to_local(feet_position), radial_strength)
+
+## Sweep collision-resolved grounded travel through the layer. Adds momentum, never mass.
+func push_mist(from_feet: Vector3, to_feet: Vector3, duration: float) -> void:
+	if _solver == null or not _solver.ready or swe_paused or not from_feet.is_finite() or not to_feet.is_finite() or not is_finite(duration) or duration <= 0.0:
+		return
+	var start := to_local(from_feet)
+	var end := to_local(to_feet)
+	var radius := clampf(movement_radius, 0.2, 2.0)
+	# Reject unrelated boxes without sampling terrain or reading the GPU.
+	var reach := Vector2(size.x, size.z) * 0.5 + Vector2.ONE * radius * 5.0
+	if minf(start.x, end.x) > reach.x or maxf(start.x, end.x) < -reach.x or minf(start.z, end.z) > reach.y or maxf(start.z, end.z) < -reach.y:
+		return
+	_solver.movement(start, end, duration, radius, clampf(movement_coupling, 0.0, 20.0), clampf(movement_wake, 0.0, 1.0))
 
 ## Last completed GPU batch, not CPU wall time. -1 means no timestamp available.
 func swe_metrics() -> Dictionary:
@@ -170,6 +218,8 @@ func _on_solver_initialized(success: bool) -> void:
 		return
 	if success:
 		_material.set_shader_parameter("thickness_map", _solver.texture)
+		_material.set_shader_parameter("wind_phase_map", _solver.wind_phase_texture)
+		_material.set_shader_parameter("simulated_wind", true)
 	else:
 		push_error("Heightfield Fog SWE requires a working Forward+ RenderingDevice; showing static initialization")
 
@@ -178,6 +228,8 @@ func _stop_solver() -> void:
 		_solver.close()
 		_solver = null
 	if is_instance_valid(_material):
+		_material.set_shader_parameter("simulated_wind", false)
+		_material.set_shader_parameter("wind_phase_map", null)
 		_material.set_shader_parameter("thickness_map", _thickness_texture)
 
 func _exit_tree() -> void:

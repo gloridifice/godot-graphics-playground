@@ -1,6 +1,6 @@
 # 局部高度雾实验场
 
-用 Godot 4.7.2 打开项目，按 **F5** 启动 `scenes/fog_playground.tscn`：默认自由鼠标，按 **F** 进入／退出控制，**Esc** 或失焦释放。WASD 移动、Shift 跑步、空格跳跃；起跳脚下雾气汇聚，落地向外扩散，均由真实 SWE 模拟。
+用 Godot 4.7.2 打开项目，按 **F5** 启动 `scenes/fog_playground.tscn`：默认自由鼠标，按 **F** 进入／退出控制，**Esc** 或失焦释放。WASD 移动、Shift 跑步、空格跳跃；接地行走推开前方／两侧雾气并拖出尾流，起跳脚下汇聚，落地向外扩散，均作用于真实 SWE 状态。
 
 森林示例仍可打开 `addons/heightfield_fog/demo.tscn` 按 **F6**。
 
@@ -18,11 +18,41 @@
 
 ## CSG 雾实验场
 
-**F5** 或打开 `scenes/fog_playground.tscn` 按 **F6**，体验基于第三方控制器测试地图的主场景与四片局部雾：地面、斜坡、出生高台和远处跳台。默认不捕获鼠标，**F** 切换控制／释放，**Esc** 或失焦释放；单击、Ctrl 或重新获得焦点不捕获。释放时不接受移动／跳跃／镜头输入，但保留重力、碰撞和落地扰雾。
+**F5** 或打开 `scenes/fog_playground.tscn` 按 **F6**，体验基于第三方控制器测试地图的主场景与三片局部雾：基础平台、斜坡和出生高台。默认不捕获鼠标，**F** 切换控制／释放，**Esc** 或失焦释放；单击、Ctrl 或重新获得焦点不捕获。释放时不接受移动／跳跃／镜头输入，但保留重力、碰撞和落地扰雾。
 
-`FogFields` 下四个节点可独立移动、调整 Size、Initialization 和外观；地面使用水平雾顶，高台及斜坡使用贴承载面的薄层。四片雾均开启 SWE，并有自然密度漂移。真实接地起跳会向脚下施加向内动量，使雾汇聚；落地施加向外动量，使雾扩散。初次出生接地、二段空中跳跃不施加地面冲量；高差 1.5 m 外的雾不受影响。根节点 **Player Mist Interaction** 的 **Takeoff Pull**（默认 0.8）与 **Landing Push**（默认 1）调整两种强度，设为 0 可分别关闭；作用范围及速度由各盒 **Jump Radius / Jump Speed** 控制。不额外生成或删除雾量。
+`FogFields` 下三个节点可独立移动、调整 Size、Initialization 和外观；当前均使用贴承载面的薄层，也可开启 Horizontal Top 改用水平雾顶。三片雾均开启 SWE，并有自然密度漂移。真实接地起跳会向脚下施加向内动量，使雾汇聚；落地施加向外动量，使雾扩散。初次出生接地、二段空中跳跃不施加地面冲量；高差 1.5 m 外的雾不受影响。根节点 **Player Mist Interaction** 的 **Takeoff Pull**（默认 0.8）与 **Landing Push**（默认 1）调整两种强度，设为 0 可分别关闭；作用范围及速度由各盒 **Jump Radius / Jump Speed** 控制。不额外生成或删除雾量。
+
+在雾盒的 **SWE Simulation** 分组开启 **SWE Editor Enabled**，可直接在编辑器预演重力、风输送及边界补雾；开启与关闭都会重置场，关闭回到静态初态。默认关闭，与运行时 **SWE Enabled** 独立；**SWE Paused** 可暂停并保留预览状态。若需减轻风输送导致的细节模糊，可开启 **SWE Second Order** 试用 MC 限制器的二阶空间重建；默认关闭，切换时重置物理场、保留噪波显示相位，编辑器与运行时均适用，GPU 成本更高。
 
 每次在编辑器打开场景或运行场景，都会自动构建内存高度图，不会将烘焙数据保存到 `.tscn` 或 `.res`。修改 CSG 或雾盒布局后，选择 **FogPlayground 根节点**，点击 Inspector 的 **Bake all playground fog** 更新预览；只需保存布局／参数修改，不需保存烘焙结果。该按钮先刷新 CSG 的烘焙网格再重烘焙全部雾盒；不要仅依赖单盒按钮更新已编辑的 CSG。派生 `_FogCSGSurface` 无渲染层、不投影、不生成碰撞，也不随场景保存，原有 CSG 和碰撞保持不变。
+
+**生成与消失的位置均包括：无实体格的交界面，以及矩形高度场边界。** 风从这些位置吹入有效格时，按初始化配置生成雾；雾流出时直接消失。孔洞是否与盒外连通没有区别，不再把无实体处作为墙反弹。无风／横风时，压力或玩家动量仍可把雾推出边界；无实体格本身始终为空。重烘焙后使用新高度场的有效标志，无需手动分类。
+
+**上风侧有入口却不补雾时，先检查 Horizontal Top。** 开启后，入口厚度为雾顶减承载高度再裁零；雾顶相对盒底计算，并叠加 Noise。高坡入口若高于雾顶，补入厚度就是零，下游已有雾仍会随风离开，形成缺雾带。这不是入口漏判，也不是 Coverage 把物理厚度删掉。需要沿各承载面铺雾时关闭 Horizontal Top，或提高 Base Height／Height Offset 使上风入口低于雾顶。
+
+### 行走推动调参
+
+`fog_playground` 已连接真实接地位移到各雾盒；静止、完全顶墙或空中不会持续推雾。进入控制后沿薄雾行走，观察前方与侧边堆积、经过处变薄，以及停步后仍随模拟演化的尾流。没有贴在角色身上的密度清空遮罩。
+
+选中 `FogFields` 中的雾盒，在 **Interaction / Movement** 调整：
+
+| 参数 | 默认值 | 用途 |
+| --- | --- | --- |
+| Movement Radius | 0.65 m | 有效体宽尺度；越大推开的通道越宽，与 Jump Radius 独立 |
+| Movement Coupling | 7 s⁻¹ | 人体与雾的动量耦合率；越大推动越强，0 关闭行走推动 |
+| Movement Wake | 0.65 | 身后拖曳／平面环流强度；0 只保留前推与侧向分流 |
+
+参数实时生效，不重置雾。为了单看行走，可临时设 Initialization 的 **Wind Speed=0**，将 **SWE Gravity Threshold** 设得高于初始厚度，排除背景输送和重力摊平；这不是运行条件。走出雾区、松开按键或释放鼠标后不再注入运动源，已有尾流由阻尼和通量自然衰减。暂停不接收新轨迹，恢复不会补放暂停期间的移动。行走作用的承载高差在 0.15～0.8 m 渐出，避免影响上下层；森林示例没有接入行走。
+
+### 行走气流调研与二维近似
+
+人体不是在脚下持续制造圆形爆炸。移动时会在前方排挤空气，空气沿身体两侧绕过，身后出现卷吸和拖曳尾流；停步也不会让尾流立即消失。研究还观察到成对涡结构、明显的向下气流，以及尾流向地面和侧方扩散。可参考：
+
+- [The influence of human walking on the flow and airborne transmission in a six-bed isolation room](https://pmc.ncbi.nlm.nih.gov/articles/PMC7126717/)：行走假人引发的前方气流与尾流输送，属于特定病房条件下的 CFD 模拟。
+- [Human-walking-induced wake flow – PIV experiments and CFD simulations](https://doi.org/10.1177/1420326X17701279)：PIV／CFD 对人体替身尾流的研究，报告下洗与涡结构；替身与控制环境不等同于任意真实步态。
+- [Three-dimensional analysis of the effect of human movement on indoor airflow patterns](https://pubmed.ncbi.nlm.nih.gov/32870542/)：真实人体行走的三维气流测量，报告经过后最长约 10 秒的扰动。该时间受测点、步速和环境影响，不用作游戏中的固定恢复计时。
+
+当前 SWE 只保存近地雾的厚度与水平动量，无法表达真实尾流的竖向下洗、热羽流和完整三维涡旋。实现将上述形态投影为可调的前推／侧向分流／顺行尾流加反向平面环流，源项不直接增减雾量，质量只通过开放边界生成／移除；平面环流与各项系数是游戏近似，不声称复现论文中的涡轴、湍流频率或定量速度。完整输入与时间合约见 [SWE 合约](../specs/heightfield-swe.md#接地行走推动与尾流)。
 
 ## 编辑
 
@@ -33,7 +63,7 @@
 
 贴地薄雾预设在 `addons/heightfield_fog/presets/forest_mist.tres`。两个盒体 Base Height=2.55 m、盒底 Y=−2 m，基准水平雾顶为 0.55 m；叠加 0.35 m 振幅、0.4 频率的噪波后减地形，再限制初始贴地厚度不超过 **Max Thickness=0.38 m**。**Coverage=0.5** 产生间隙，**Top Softness=0.85** 软化上沿，**Wind Stretch=4.5** 拉长雾带；降低 Concentration 可减淡。
 
-高度、Max Thickness、Noise 全组、Wind Direction／Stretch 的修改会重建初态并重置 SWE；Concentration、Coverage／Softness、Top Softness、Detail Strength／Scale、Wind Speed 只改显示，保留模拟。SWE 开启后仍会把质量输送到低处，可能超过初始厚度上限；想保留设计好的厚度可关闭 SWE，但不能响应起跳。关闭 SWE 不会切回另一套噪波。风速只移动疏密纹理，不驱动物理；盒间无通量交换，树干／倒木碰撞不自动成为雾障碍。详细调参见 [addon 说明](../../addons/heightfield_fog/README.md#贴地雾带调参)。
+高度、Max Thickness、Noise 全组、Wind Direction／Stretch 的修改会重建初态并重置 SWE；Concentration、Coverage／Softness、Top Softness、Detail Strength／Scale 只改显示，保留模拟。自然模式 SWE 中，Wind Speed 实时控制真实厚度与扰动输送，上风边界连续补入同配置的噪波雾，下风边界排出；设为 0 停止风补入且不重置，但无实体处和盒边仍可向外排出。SWE Gravity Threshold 只抑制阈值以下的重力压力，不阻止风搬运薄雾。SWE 仍可能堆积到初始上限以上；Max Thickness 同时限制初态与新补入雾，不裁切已有状态。想保留设计厚度可关闭 SWE，但不能响应起跳；静态模式风速只移动疏密纹理。盒间无通量交换，树干／倒木碰撞不自动成为雾障碍。详细调参见 [addon 说明](../../addons/heightfield_fog/README.md#风输送与边界补雾)。
 
 添加新雾盒时创建 `HeightfieldFogBox` 节点。Source Root 留空使用场景根；不需要参与烘焙的 mesh 加入 `heightfield_fog_ignore` 分组。详见 [addon 使用说明](../../addons/heightfield_fog/README.md)。
 

@@ -21,13 +21,15 @@ func _run() -> void:
 	var world := WorldEnvironment.new()
 	world.environment = environment
 	scene.add_child(world)
-	_surface(scene, Vector3(16,0.2,16), Vector3(0,-0.1,0))
+	var ground := _surface(scene, Vector3(16,0.2,16), Vector3(0,-0.1,0))
 	var rock := _surface(scene, Vector3(2,1.0,6), Vector3(2,0.5,0))
 	var box := HeightfieldFogBox.new()
 	box.position = Vector3(0,-2,0)
 	box.size = Vector3(12,6,12)
 	box.source_root = NodePath("..")
 	box.edge_fade = 1.0
+	# Keep the initial comparison static; open edges may still pass player momentum.
+	box.swe_gravity_threshold = 1.0
 	box.extinction = 0.8
 	box.brightness = 1.0
 	box.tint = Color.WHITE
@@ -88,6 +90,29 @@ func _run() -> void:
 	await create_timer(1.0).timeout
 	var moved := await _capture()
 	_check(_difference(before,moved) > 0.001, "nonzero wind must advect the rendered mist")
+	# Switching render sources must not reset density detail to a different noise phase.
+	# Keep nonzero wind and visible coverage gaps; do not let SWE take even one step.
+	preset.coverage = 0.62
+	preset.coverage_softness = 0.06
+	box.swe_paused = true
+	var preview := await _capture()
+	box.swe_enabled = true
+	var initial_swe := await _capture()
+	var initial_report: Dictionary = {}
+	box.swe_snapshot(func(report: Dictionary): initial_report.merge(report))
+	for i in 300:
+		if not initial_report.is_empty():
+			break
+		await process_frame
+	_check(not initial_report.is_empty() and initial_report.get("simulated_time", -1.0) == 0.0, "phase comparison uses a real initialized GPU field with zero evolution")
+	var initial_difference := _difference(preview,initial_swe)
+	_check(initial_difference < 0.001, "enabling paused SWE preserves the preview noise phase: %s" % initial_difference)
+	box.swe_enabled = false
+	var reset_preview := await _capture()
+	_check(_difference(preview,reset_preview) < 0.001, "disabling SWE restores initial thickness without replacing the preview detail phase")
+	box.swe_paused = false
+	preset.coverage = 1.0
+	preset.coverage_softness = 0.15
 	# End-to-end: actual SWE output must reach the fog shader through Texture2DRD,
 	# including world-to-local impulse conversion for this rotated box.
 	preset.wind_speed = 0.0
@@ -116,13 +141,46 @@ func _run() -> void:
 	preset.coverage = 1.0
 	var restored := await _capture()
 	_check(_difference(frozen, restored) < 0.001, "density/coverage edits must preserve the disturbed paused SWE state")
+	# Switching the production order option resets physics even while paused.
+	box.swe_second_order = true
+	var order_reset := await _capture()
+	_check(_difference(baseline,order_reset)<0.001,"switching reconstruction order resets the disturbed field to its original rendered initialization")
 	# Exercise disposal/recreation without stale GPU texture bindings.
 	box.swe_enabled = false
 	await _capture()
 	box.swe_enabled = true
 	await _capture()
 	_check(box.swe_metrics().ready,"SWE can be recreated after disabling")
-	print("Natural mist GPU: ", "PASS" if failures == 0 else "FAIL", " (basin/rock, soft top, zero wind, rotated box, drift, SWE texture/impulse/pause/recreate)")
+	# Distinct lifecycle regression: rebaking a rotated, already-running box must
+	# refresh the open support perimeter and texture binding when its support shrinks.
+	preset.wind_speed = 1.0
+	box.swe_paused = false
+	(ground.mesh as BoxMesh).size = Vector3(6,0.2,6)
+	box.bake()
+	await _capture()
+	await create_timer(1.0).timeout
+	var rebaked: Dictionary = {}
+	box.swe_snapshot(func(report: Dictionary): rebaked.merge(report))
+	for i in 300:
+		if not rebaked.is_empty():
+			break
+		await process_frame
+	_check(not rebaked.is_empty(),"rebaked field exposes a ready GPU state")
+	if not rebaked.is_empty():
+		var terrain := box.height_map.get_image()
+		var maximum_error := 0.0
+		var valid_output := true
+		for z in box.resolution:
+			for x in box.resolution:
+				var h: float = rebaked.state[(z*box.resolution+x)*4]
+				valid_output = valid_output and is_finite(h) and h>=0.0
+				if terrain.get_pixel(x,z).g>0.5:
+					maximum_error = maxf(maximum_error,absf(h-0.5))
+				else:
+					valid_output = valid_output and h==0.0
+		_check(terrain.get_pixel(0,0).g==0.0 and terrain.get_pixel(box.resolution/2,box.resolution/2).g==1.0,"rebake refreshes the real support footprint")
+		_check(valid_output and maximum_error<0.0001 and rebaked.simulated_time>0.5 and rebaked.faults==0,"rebaked rotated platform generates and releases wind-driven mist at its missing-support perimeter without pile-up")
+	print("Natural mist GPU: ", "PASS" if failures == 0 else "FAIL", " (basin/rock, soft top, zero wind, rotated box, drift, SWE texture/impulse/pause/recreate/rebake) initial_phase_difference=", initial_difference)
 	scene.queue_free()
 	for i in 5:
 		await process_frame

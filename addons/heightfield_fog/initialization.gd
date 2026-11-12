@@ -2,7 +2,7 @@
 class_name HeightfieldFogInitialization
 extends Resource
 
-# One seamless fBm tile, shared by CPU initialization and GPU density sampling.
+# One seamless fBm tile, shared by CPU initialization, GPU inflow and density sampling.
 # Coordinates are in noise space: Frequency controls meters, not texture resolution.
 const NOISE_PERIOD := 32.0
 const NOISE_SIZE := 512
@@ -11,7 +11,7 @@ const NOISE_SIZE := 512
 @export_range(0.0, 8.0, 0.01, "suffix:m") var base_height: float = 0.4
 @export_range(-8.0, 8.0, 0.01, "suffix:m") var height_offset: float = 0.0
 @export var horizontal_top: bool = false
-## Limit initial thickness above the ground, even in deep hollows. Zero = unlimited.
+## Limit initial/incoming thickness above the ground, even in deep hollows. Zero = unlimited.
 ## SWE may subsequently transport/pile up this mass; this is not a simulation clamp.
 @export_range(0.0, 8.0, 0.01, "suffix:m") var max_thickness: float = 0.0
 ## Dimensionless concentration; live shading only, does not reset SWE.
@@ -43,7 +43,8 @@ const NOISE_SIZE := 512
 @export_range(1.0, 8.0, 0.1) var wind_stretch: float = 4.0
 ## World X/Z direction: 0 degrees is +X, 90 degrees is +Z.
 @export_range(-180.0, 180.0, 1.0, "degrees") var wind_direction: float = 25.0
-## Density advection only; zero freezes visual drift. Does not force the SWE solver.
+## World-space transport speed. SWE moves thickness and opens upwind/downwind boundaries.
+## Without SWE this only drifts visual density. Zero stops wind inflow, not disturbance outflow.
 @export_range(0.0, 1.0, 0.01, "suffix:m/s") var wind_speed: float = 0.12
 
 var _noise_key: Array = []
@@ -70,6 +71,20 @@ func _ensure_noise() -> void:
 	_noise_image = noise.get_seamless_image(NOISE_SIZE, NOISE_SIZE, false, false, 0.1, false)
 	_noise_texture = null
 	_noise_key = key
+
+## Small per-tick GPU configuration; dynamic state and noise phase stay on the GPU.
+func wind_parameters(box_transform: Transform3D) -> PackedFloat32Array:
+	var direction := Vector2.from_angle(deg_to_rad(wind_direction))
+	var speed := clampf(wind_speed, 0.0, 1.0) if natural_mist_enabled else 0.0
+	var velocity := box_transform.basis.inverse() * Vector3(direction.x, 0.0, direction.y) * speed
+	var basis := box_transform.basis
+	return PackedFloat32Array([
+		velocity.x, velocity.z, 0.0, 0.0,
+		box_transform.origin.x, box_transform.origin.z, base_height + height_offset, 1.0 if horizontal_top else 0.0,
+		basis.x.x, basis.x.z, basis.z.x, basis.z.z,
+		maxf(noise_amplitude, 0.0), maxf(max_thickness, 0.0), clampf(noise_frequency, 0.001, 8.0) / NOISE_PERIOD, clampf(wind_stretch, 1.0, 8.0),
+		direction.x, direction.y, noise_offset.x, noise_offset.y,
+	])
 
 func noise_texture() -> Texture2D:
 	_ensure_noise()

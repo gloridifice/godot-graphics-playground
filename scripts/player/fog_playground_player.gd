@@ -2,6 +2,7 @@ extends PlayerCharacter
 
 signal mist_takeoff(feet_position: Vector3)
 signal mist_landed(feet_position: Vector3)
+signal mist_moved(from_feet: Vector3, to_feet: Vector3, duration: float)
 
 var _has_touched_floor := false
 
@@ -26,6 +27,12 @@ func _physics_process(delta: float) -> void:
 		mist_takeoff.emit(feet_before)
 	if not grounded and is_on_floor() and _has_touched_floor and falling_speed > 1.0:
 		mist_landed.emit(get_feet_position())
+	if grounded and is_on_floor() and not taking_off and delta > 0.0:
+		var feet_after := get_feet_position()
+		var displacement := Vector2(feet_after.x - feet_before.x, feet_after.z - feet_before.z)
+		# Collision-resolved travel, not input/facing: walls and standing still exert no force.
+		if displacement.length() > 0.05 * delta:
+			mist_moved.emit(feet_before, feet_after, delta)
 	if is_on_floor():
 		_has_touched_floor = true
 

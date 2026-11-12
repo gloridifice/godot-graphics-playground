@@ -10,6 +10,15 @@ func _initialize() -> void:
 func _run() -> void:
 	var main_path: String = ProjectSettings.get_setting("application/run/main_scene")
 	var scene := (load(main_path) as PackedScene).instantiate() as Node3D
+	# Isolate local interaction conservation from wind sources and background edge drainage.
+	for field in scene.get_node("FogFields").get_children():
+		if field is HeightfieldFogBox:
+			field.initialization.wind_speed = 0.0
+			if field.name == &"SpawnPlatformMist":
+				# Suppress resting pressure spilling over distant platform edges.
+				field.swe_gravity_threshold = 2.0
+				# World travel must remain directional when the receiving box is rotated.
+				field.rotation.y = 0.45
 	root.add_child(scene)
 	current_scene = scene
 	root.grab_focus()
@@ -85,7 +94,42 @@ func _run() -> void:
 	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "window focus loss releases control")
 	root.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_IN)
 	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "focus regain does not capture the cursor")
-	print("Fog playground GPU: ", "PASS" if failures==0 else "FAIL", " takeoff_radial=",inward," landing_radial=",outward)
+	# Distinct transport risk: real collision-resolved WASD motion must reach the GPU.
+	# Reset jump waves; gravity remains suppressed to isolate walking momentum.
+	box.reset_swe()
+	await _physics_steps(12)
+	var walking_start := await _snapshot(box)
+	box.swe_paused = true
+	await _key(KEY_F)
+	Input.action_press("play_char_move_forward_action")
+	await _physics_steps(8)
+	Input.action_release("play_char_move_forward_action")
+	await _key(KEY_ESCAPE)
+	box.swe_paused = false
+	await _physics_steps(6)
+	var resumed := await _snapshot(box)
+	var pause_error := 0.0
+	for i in resumed.state.size():
+		pause_error = maxf(pause_error,absf(resumed.state[i]-walking_start.state[i]))
+	_check(pause_error<0.00001,"walking while paused does not queue a delayed force on resume")
+	var walking_feet: Vector3 = player.get_feet_position()
+	await _key(KEY_F)
+	Input.action_press("play_char_move_forward_action")
+	await _physics_steps(20)
+	Input.action_release("play_char_move_forward_action")
+	var walking_end: Vector3 = player.get_feet_position()
+	await _key(KEY_ESCAPE)
+	var walked := await _snapshot(box)
+	var travel := walking_end-walking_feet
+	travel.y = 0.0
+	var local_forward := box.global_basis.inverse()*travel.normalized()
+	var momentum := Vector2.ZERO
+	for i in range(0,walked.state.size(),4):
+		momentum += Vector2(walked.state[i+1],walked.state[i+2])
+	_check(travel.length()>0.2 and player.is_on_floor() and events.size()==2,"accepted WASD walks on the platform without fabricating jump events")
+	_check(momentum.dot(Vector2(local_forward.x,local_forward.z))>0.1,"real player walking delivers directional momentum into the rendered SWE field")
+	_check(absf(_mass(walked)-_mass(walking_start))/_mass(walking_start)<0.001 and walked.faults==0,"scene walking redistributes existing fog without boundary loss")
+	print("Fog playground GPU: ", "PASS" if failures==0 else "FAIL", " takeoff_radial=",inward," landing_radial=",outward," walk_distance=",travel.length()," walk_momentum=",momentum)
 	scene.free()
 	await process_frame
 	quit(0 if failures==0 else 1)

@@ -86,5 +86,5 @@ common/physics_interpolation=true
 [rendering]
 
 rendering_device/driver.windows="d3d12"
-environment/volumetric_fog/volume_size=192
-environment/volumetric_fog/volume_depth=192
+environment/volumetric_fog/volume_size=320
+environment/volumetric_fog/volume_depth=320

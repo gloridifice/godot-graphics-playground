@@ -22,8 +22,10 @@ uniform float detail_strength = 0.3;
 uniform float detail_scale = 1.0;
 uniform float wind_stretch = 4.0;
 uniform vec2 wind_direction = vec2(1.0, 0.0);
-uniform float wind_speed = 0.12;
-uniform float mist_time = 0.0;
+// Preview displacement is retained as the visual origin across SWE mode changes.
+uniform vec2 density_drift = vec2(0.0);
+uniform bool simulated_wind = false;
+uniform sampler2D wind_phase_map : filter_nearest, repeat_disable;
 uniform vec2 noise_offset = vec2(0.0);
 
 // Antiderivative of a constant lower density with a smoothstep fade at the top.
@@ -61,7 +63,11 @@ void fog() {
 			float radius = max(vertical_filter * 0.5, 0.001);
 			if (natural_mist_enabled) {
 				// A world-aligned field prevents rotated/adjacent boxes from rotating the wind.
-				vec2 advected = WORLD_POSITION.xz + noise_offset - wind_direction * wind_speed * mist_time;
+				vec2 drift = density_drift;
+				if (simulated_wind) {
+					drift += textureLod(wind_phase_map, vec2(0.5), 0.0).rg;
+				}
+				vec2 advected = WORLD_POSITION.xz + noise_offset - drift;
 				// No alternate procedural top: preview and SWE consume the same resource-built field.
 				float h = textureLod(thickness_map, uv, 0.0).r * weight;
 				if (h > 0.00001 && y > -radius && y < h + radius) {

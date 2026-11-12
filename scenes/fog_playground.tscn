@@ -5,8 +5,8 @@
 [ext_resource type="Script" uid="uid://puj1iwmxwbme" path="res://scripts/fog_playground.gd" id="3_fog_playground"]
 [ext_resource type="Script" uid="uid://c4qkoieuiid0l" path="res://addons/heightfield_fog/heightfield_fog_box.gd" id="4_fog_box"]
 [ext_resource type="Script" uid="uid://25coo06v615h" path="res://addons/heightfield_fog/initialization.gd" id="5_fog_initialization"]
-[ext_resource type="Script" path="res://scripts/player/fog_playground_player.gd" id="6_player"]
-[ext_resource type="Script" path="res://scripts/camera/fog_playground_camera.gd" id="7_camera"]
+[ext_resource type="Script" uid="uid://31km1us3sj1" path="res://scripts/player/fog_playground_player.gd" id="6_player"]
+[ext_resource type="Script" uid="uid://rylbny207p8k" path="res://scripts/camera/fog_playground_camera.gd" id="7_camera"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_6f4by"]
 sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
@@ -39,18 +39,14 @@ size = Vector2(110, 110)
 
 [sub_resource type="Resource" id="Resource_ground_mist"]
 script = ExtResource("5_fog_initialization")
-base_height = 1.15
-horizontal_top = true
-max_thickness = 0.65
+base_height = 0.0
 concentration = 1.5
-noise_amplitude = 0.25
-noise_frequency = 0.995
+noise_amplitude = 1.0
+noise_frequency = 1.0
 noise_seed = 23
 natural_mist_enabled = true
-top_softness = 0.85
-coverage = 0.62
-wind_stretch = 3.5
-wind_speed = 0.1
+wind_stretch = 1.0
+wind_speed = 0.91
 
 [sub_resource type="Resource" id="Resource_surface_mist"]
 script = ExtResource("5_fog_initialization")
@@ -169,15 +165,21 @@ depth = 6.0
 [node name="FogFields" type="Node3D" parent="." unique_id=1255730462]
 
 [node name="GroundMist" type="Node3D" parent="FogFields" unique_id=1756978656]
-transform = Transform3D(0.8660254, 0, 0.5, 0, 1, 0, -0.5, 0, 0.8660254, -4, -1.0090039, -8)
+transform = Transform3D(0.016086072, 0, 0.99987054, 0, 1, 0, -0.99987054, 0, 0.016086072, -4, 1.2516038, -7.954745)
 script = ExtResource("4_fog_box")
-size = Vector3(32, 5.585217, 22)
+size = Vector3(32, 1.8174669, 22)
 source_root = NodePath("../../Structures")
 initialization = SubResource("Resource_ground_mist")
-edge_fade = 3.0
-extinction = 2.0
-brightness = 0.35
+extinction = 1.0
 swe_enabled = true
+swe_editor_enabled = true
+swe_second_order = true
+swe_gravity = 0.1
+swe_gravity_threshold = 0.6
+jump_radius = 1.5
+jump_speed = 0.3
+movement_radius = 0.4
+movement_coupling = 1.0
 
 [node name="RampMist" type="Node3D" parent="FogFields" unique_id=284222956]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 1.8, -11)
@@ -203,27 +205,16 @@ extinction = 2.0
 brightness = 0.35
 swe_enabled = true
 
-[node name="SteppingStonesMist" type="Node3D" parent="FogFields" unique_id=264512063]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 27, -0.5, -26)
-script = ExtResource("4_fog_box")
-size = Vector3(24, 8, 32)
-source_root = NodePath("../../Structures")
-initialization = SubResource("Resource_surface_mist")
-edge_fade = 3.0
-extinction = 1.8
-brightness = 0.35
-swe_enabled = true
-
 [node name="PlayerCharacter" parent="." unique_id=121184384 instance=ExtResource("2_kw53q")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 6, -18)
 script = ExtResource("6_player")
 
-[node name="CameraHolder" parent="PlayerCharacter" index="2"]
+[node name="CameraHolder" parent="PlayerCharacter" index="2" unique_id=367391257]
 script = ExtResource("7_camera")
 
-[node name="Controls" type="CanvasLayer" parent="."]
+[node name="Controls" type="CanvasLayer" parent="." unique_id=1290473374]
 
-[node name="Hint" type="Label" parent="Controls"]
+[node name="Hint" type="Label" parent="Controls" unique_id=1811348315]
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
@@ -235,7 +226,6 @@ theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
 theme_override_font_sizes/font_size = 18
-text = "F: control / release  |  Esc: release  |  WASD: move  |  Space: jump (gather) / land (spread)"
-mouse_filter = 2
+text = "F: control / release  |  Esc: release  |  WASD: move (push / wake)  |  Space: jump (gather) / land (spread)"
 
 [editable path="PlayerCharacter"]

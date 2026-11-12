@@ -12,12 +12,18 @@ func _ready() -> void:
 	if not Engine.is_editor_hint():
 		$PlayerCharacter.mist_takeoff.connect(_on_takeoff)
 		$PlayerCharacter.mist_landed.connect(_on_landed)
+		$PlayerCharacter.mist_moved.connect(_on_moved)
 
 func _on_takeoff(feet_position: Vector3) -> void:
 	_disturb_fields(feet_position, -takeoff_pull)
 
 func _on_landed(feet_position: Vector3) -> void:
 	_disturb_fields(feet_position, landing_push)
+
+func _on_moved(from_feet: Vector3, to_feet: Vector3, duration: float) -> void:
+	for box in $FogFields.get_children():
+		if box is HeightfieldFogBox:
+			box.push_mist(from_feet, to_feet, duration)
 
 func _disturb_fields(feet_position: Vector3, radial_strength: float) -> void:
 	for box in $FogFields.get_children():
