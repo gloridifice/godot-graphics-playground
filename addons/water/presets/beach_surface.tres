@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="WaterSurfaceSettings" format=3 uid="uid://h7y8et12oef0"]
+
+[ext_resource type="Script" uid="uid://d37eg03m237l2" path="res://addons/water/resources/surface_settings.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+size = Vector2(120.14, 120)

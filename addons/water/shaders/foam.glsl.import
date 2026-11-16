@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://bku32yc0v3mxw"
+path="res://.godot/imported/foam.glsl-5d0656d546a032fe6893f7f17a10bb5d.res"
+
+[deps]
+
+source_file="res://addons/water/shaders/foam.glsl"
+dest_files=["res://.godot/imported/foam.glsl-5d0656d546a032fe6893f7f17a10bb5d.res"]
+
+[params]
+

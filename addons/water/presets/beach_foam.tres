@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="WaterFoamSettings" load_steps=2 format=3]
+[ext_resource type="Script" path="res://addons/water/resources/foam_settings.gd" id="1"]
+[resource]
+script = ExtResource("1")
+enabled = true
+generation = 4.0
+background_multiplier = 0.3
+front_generation = 16.0

@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://mp7m6sx0qql4"
+path="res://.godot/imported/ifft.glsl-f75aabbc2cf06c7ae97d1b25c0794c52.res"
+
+[deps]
+
+source_file="res://addons/water/shaders/ifft.glsl"
+dest_files=["res://.godot/imported/ifft.glsl-f75aabbc2cf06c7ae97d1b25c0794c52.res"]
+
+[params]
+

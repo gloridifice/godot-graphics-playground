@@ -59,6 +59,21 @@
 - 盒边和无承载孔洞均为零外部压力的开放周界；材质回溯逐格检查第一个交界，背景风入口记录参考坐标和入口承载高度，后续从资源公式持续重建，不错误钳到盒内 `h₀`。每格以初态／入口权重及入口加权承载高度区分来源，剩余为空域；初态参考点越出承载域时剔除其残余权重并归一化剩余来源，防止伪零接缝。其余外部厚度为零。单轨迹最多检查 128 格面，预算耗尽记录 `trace_limited`，不跳过未检查孔洞。各盒仍不交换状态。
 - GPU 保存不可变初始高度及每格 32 字节的材质／来源双缓冲，重建厚度直接绑定原 R32F Texture2DRD；另输出世界反向材质位移，Coverage／密度细节随局部气流卷动，不再双加全局风漂移。创建、计算和释放仍在全局 RenderingDevice 的渲染线程，无正常帧 CPU 场回读。开关／切换重置状态并把增益置为 `1`，暂停同时冻结增益恢复，预览起点生命周期与现有节点一致，不迁移动态状态。`swe_snapshot()` 在本模式返回独立的 scalar／height_gain／velocity 和投影诊断，不伪装成 SWE 动量；精确边界见 [Stable Fluids 合约](specs/heightfield-stable-fluid.md)。
 
+## GPU 水体（独立 addon）
+
+- `addons/water/` 新增独立于高度雾的水体，入口为 `scenes/water_playground.tscn`（F6）；不替换 F5 的雾实验场。源算法来自本地 Rust water-simulation 的 spectral／nearshore／water optics，来源与范围见 [SOURCE](../addons/water/SOURCE.md)。不引入 Rust／wgpu 运行时；现已迁移物理焦散、近／远海泡沫和自定义 SSR，仍不包含湿沙／粒子浪花。三种 NSH 派生纹理保留各自来源与 MIT 通知。
+- `WaterBody3D` 持有显示网格、材质和一个 `WaterGPU`。直接子节点 `FFTDeformer3D`／`SWEDeformer3D` 分别配置远海波谱和局部区域；首版各支持一个启用实例，不做重叠覆盖或区域间通量。水体原点 Y 是平均水位；水体／区域只支持平移、Y 旋转及单位缩放。
+- `resources/` 提供九类可复用 `.tres` 参数资产：FFT、SWE、Bake、Surface、Material、Caustics、Foam、Foam Material、SSR；默认逐节点独立，也可显式共享，独立编辑使用 Make Unique。节点路径／变换和暂停／编辑器模拟开关保留在场景；动态 GPU 状态不存资产。
+- `baker.gd` 直接采样选定静态 MeshInstance3D 和根 CSG 最终网格，在区域局部高度区间内保留单元中心最高向上面，支持陡坡和镜像源几何；不沿用雾的承载坡度过滤或孔洞开放语义。SWE 区域 Gizmo 的宽高深手柄编辑烘焙资产并使用撤销／重做。无采样格默认无效，可显式补底。高度场只存内存，进入／重入场景延后两帧自动烘焙，布局／分辨率／来源变动后旧结果失效，源几何编辑需手动重烘焙。
+- `water_gpu.gd` 在全局 RenderingDevice 的渲染线程组织波谱演化、六通道 IFFT、SWE、发布和资源释放。三个 FFT 显示通道与三个过滤后的水位／匹配动量输入通道分开；局部 SWE 采用水体重力、静水重建 Rusanov、一阶 Euler／二阶 MUSCL + RK2、供给格限流及 GPU CFL。未选中边界与内部无效格反射，选中的 FFT 边界有松弛带；不使用雾的风输送、约化重力或阈值。
+- 60 Hz 固定 tick 有 CPU 追赶上限与 GPU 子步预算；GPU 接受时间是 FFT／SWE 的共同真值。含 SWE 的 tick 先生成目标 FFT 供子步插值，再在接受时间重算显示 FFT，预算不足不会发生相位提前。正常帧无全场 CPU 回读、submit/sync；FFT、SWE、近岸泡沫、材质位移、远海泡沫五张 RGBA32F Texture2DRD 直接进入水面材质。显式 snapshot 可回读状态／波场／床面／时间／fault／丢时，GPU timestamp 与 CPU 提交时间分开。
+- `shaders/water.gdshader` 在一个显示网格上混合两种绝对自由面和水平挤浪，烘焙区域默认使用参考模型分支，内部 SWE、边界过渡；旧按深度混合保留为显式模式。基础曲面法线之上，水面、泡沫与焦散共享参考项目的周期 Catmull–Rom FFT 小波坡度，各用自身采样足迹渐隐；不改变几何或模拟。湿面插值避免干岩石拉出假水丘。基础光学包含线性 RGB 介质积分、反向 Z 场景光程、菲涅耳、介电 GGX、可选 HDR 经纬反射图和快速折射；缺少反射图时使用显式颜色。Godot 管理灯光、天空、色调映射和雾；没有自动天空捕获、深度金字塔物理折射、完整天光积分、相机入水或重叠透明水层。
+- `caustics_gpu.gd` 借用发布纹理，通过共享 `surface.gdshaderinc` 获取同源基础水面与小波坡度，按光束足迹求最终光学法线，执行 Snell 折射、双线性片 DDA 最近根求交和菲涅耳／消光，用光束三角形面积比计算面通量，由 `caustics_resolve.glsl` 按接收面积重建共享顶点照度，再连续插值加法光栅到世界 RGBA16F 图；避免整片三角形常量照度产生块状斑。水面在匹配床面的屏幕接收点处以平面参考照度归一化调制背景；不声称精确替换 Godot 单个直射光分量。示例为 512 光束格／2048 接收贴图，两种精度独立；没有源高度 min/max 树加速，单层／预算／欠采样限制仍在。
+- 泡沫拥有独立近岸量／动量／材质位移及远海雅可比历史。默认近岸用一阶／受限 MUSCL 保守通量和水体匹配 RK 阶段，源项／寿命每完成子步解析积分一次；可选 N/R 使用源项目的 SL＋局部面积压缩近似及双寿命反应。相位按实际接受时间增量积分，两套坐标只在不可见时重置；普通生成／外观编辑保留历史，原始波谱未变的近岸 GPU 重建保留远海覆盖。NSH 纹理保留线性四通道与 mip，材质、微法线及抬高不反作用水体。
+- 原生 SSR 兼容性通过同场景原生镜面正对照与当前水面开关比较验证，当前水面不能直接接收 Environment SSR。因此 `ssr.gdshaderinc` 迁移投影线段／世界命中判断，使用 Godot 反向 Z、当前混合水面法线、透视／正交视线和有界像素 DDA，在水上不透明命中与环境回退间混合后应用菲涅耳。没有原屏幕 min/max 金字塔加速，步数／屏幕外／透明物体和性能限制见[效果合约](specs/water-effects.md)。
+- 参数／床面重建若有有效旧实例，在 GPU 复制当前时钟后用当前 FFT 初始化 SWE，不迁移原水流历史。显式 Reset／编辑器模拟开关／重新进入场景从零开始；烘焙失效会关闭旧实例，恢复后也从零开始。材质、显示网格、choppiness 和显示 blend_depth 不重置物理状态。编辑器默认静态预览，可独立开启真实 GPU 模拟；动态状态不保存。
+- `tests/water_bake_test.gd`、`tests/water_gpu_test.gd`、`tests/water_scene_test.gd` 分别覆盖实际资产／烘焙持久化、独立直接 DFT 与两阶水体不变量／耦合时钟，以及真实场景像素／两米解析水柱／外观不重置／重入生命周期。已在 Godot 4.7.2 / Forward+ / D3D12 / RTX 3070 通过；编辑器手柄拖拽／撤销尚未人工键鼠验收，没有跨硬件性能预算承诺。新增 `water_caustics_test.gd`、`water_foam_test.gd`、`water_effects_scene_test.gd`、`water_ssr_test.gd` 分别覆盖实际光束／解析接收照度、独立泡沫 ODE／守恒输送与历史、效果真实像素／NSH 数据导入，以及原生正对照／自定义反射。细节见[水体合约](specs/water.md)、[效果合约](specs/water-effects.md)和[指南](guides/water.md)。
+
 ## 验证与限制
 
 - addon 的 `bake_test.gd` 覆盖真实场景保存／加载不保留高度图、加载与重复进入场景自动采样新几何，以及上下层分离、旋转盒、跨顶斜面及失效／失败烘焙；`initialization_test.gd` 覆盖初态高度／厚度上限、无效格／高岩石、噪波缓存失效、平移／旋转盒世界场一致性、资产保存加载及旧字段迁移。

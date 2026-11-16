@@ -34,7 +34,7 @@ project/assembly_name="graphics"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/phantom_camera/plugin.cfg", "res://addons/heightfield_fog/plugin.cfg")
+enabled=PackedStringArray("res://addons/phantom_camera/plugin.cfg", "res://addons/heightfield_fog/plugin.cfg", "res://addons/water/plugin.cfg")
 
 [input]
 

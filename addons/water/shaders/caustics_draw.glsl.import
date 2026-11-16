@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dhy7v0jmcxeku"
+path="res://.godot/imported/caustics_draw.glsl-b1803f2e98c7a26e250d74f3d250433d.res"
+
+[deps]
+
+source_file="res://addons/water/shaders/caustics_draw.glsl"
+dest_files=["res://.godot/imported/caustics_draw.glsl-b1803f2e98c7a26e250d74f3d250433d.res"]
+
+[params]
+
