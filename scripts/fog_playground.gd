@@ -12,9 +12,9 @@ var _solver_label: Label
 
 func _ready() -> void:
 	if not Engine.is_editor_hint():
-		$PlayerCharacter.mist_takeoff.connect(_on_takeoff)
-		$PlayerCharacter.mist_landed.connect(_on_landed)
-		$PlayerCharacter.mist_moved.connect(_on_moved)
+		$PlayerCharacter.jumped.connect(_on_takeoff)
+		$PlayerCharacter.landed.connect(_on_landed)
+		$PlayerCharacter.ground_moved.connect(_on_moved)
 		var overlay := CanvasLayer.new()
 		_solver_label = Label.new()
 		_solver_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)

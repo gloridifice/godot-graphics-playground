@@ -6,7 +6,8 @@
 - 当前唯一雾效实现为 `addons/heightfield_fog/`，GDScript 管理节点、烘焙与初始化，Godot fog shader 与原生 FogVolume 负责显示。
 - 旧 SWE GPU 求解器、玩家雾交互、全局高度场烘焙插件、旧实验场及其专属工具／测试／资源已移除。当前 addon 新增独立 GPU SWE：每盒推进厚度与水平动量，起跳注入动量。没有恢复旧全局求解器，也没有三维空气或四面体渲染；当前局部 SWE 支持资源风速驱动的背景输送与上风补雾／下风排雾；另可切换独立二维 Stable Fluids 后端，使用不可压空气速度输送初始厚度与显示材质坐标，不产生 SWE 式堆积。
 - 保留通用 `scenes/player.tscn`、`scripts/player/`、`scripts/camera/`、`scripts/ui/`、网格地面 shader 和 Phantom Camera 插件，森林示例复用玩家与第三人称相机。第三方来源见 `THIRD_PARTY.md`。
-- `addons/JehenoThirdPersonController/` 独立保存 Jeh3no 的第三人称状态机控制器、相机、HUD、角色及配套美术／音效和测试地图；这是场景型资产，不是编辑器插件。仅适配资源路径及导入元数据，尚未接入森林或替换项目玩家。`scenes/fog_playground.tscn` 基于该测试地图，保留对 addon 资产的引用，并添加三个局部高度雾盒（基础平台、斜坡及出生高台）。上游测试地图保留启动捕获鼠标、Ctrl 切换；本地 `fog_playground` 通过项目子类改为默认自由鼠标、F 切换控制、Esc／失焦释放，不修改第三方脚本；来源、许可及入口见 [导入说明](../addons/JehenoThirdPersonController/SOURCE.md)。
+- `addons/motion/` 提供 Mixamo 守卫模型、动画、原生 CharacterBody3D 控制器、Motion Matching、AnimationTree 状态机与 SpringArm3D 相机，已接入主场景；不依赖第三方控制器或 Phantom Camera。独立 F6 入口为 `addons/motion/demo.tscn`，用法、来源与资源使用限制见 [Motion 说明](../addons/motion/USAGE.md)和[来源](../addons/motion/SOURCE.md)。森林角色保持独立，不随本次替换。
+- `addons/JehenoThirdPersonController/` 独立保留 Jeh3no 的控制器、相机、HUD、角色及测试地图；这是场景型资产，不是编辑器插件。主场景仅沿用其测试地图布局和地面贴图，不再实例化其角色。上游测试地图仍使用原控制器、启动捕获鼠标、Ctrl 切换；来源、许可及入口见 [导入说明](../addons/JehenoThirdPersonController/SOURCE.md)。
 
 ## 雾盒与烘焙
 
@@ -32,10 +33,14 @@
 
 ## 主场景角色与鼠标控制
 
-- `scripts/player/fog_playground_player.gd` 继承第三方 `PlayerCharacter`，保留原状态机与碰撞，在真实 `move_and_slide()` 前后检测接地起跳／落地，以胶囊底端计算脚底世界坐标。初次出生接地不施加落地冲量；空中二段跳不触发地面汇聚，落地需向下速度超过 1 m/s，避免微小贴坡抖动重复触发。
+- `addons/motion/motion_character.tscn` 使用脚底原点，`motion_character.gd` 直接继承原生 CharacterBody3D。WASD 相机相对移动；站立移动面向相机前方，A／D 使用左右横移、S 使用后退动画，不再转身播放向前走。按住 Shift 跑步、空格单次接地跳跃、按住 Ctrl 蹲伏／蹲行。蹲伏缩短独立胶囊但保持脚底不动；松开时先查询站立空间，低顶下保持蹲伏，离开后自动站起；蹲伏不能跳跃。真实 `move_and_slide()` 前后产生通用 `jumped`、`landed`、`ground_moved` 信号；出生接地不触发落地，落地需向下速度超过 1 m/s。
+- 原生 `AnimationTree` 使用 `animations/locomotion.tres` 外层状态机：Grounded／Crouch 内由 Motion Matching 选择片段与时间，Jump／Fall 仍根据真实竖直速度和接地切换，0.12 s 过渡。`addons/motion/motion_matching/` 离线从统一守卫骨架动画采样 399 帧、22 维特征（双脚位置／速度、根水平速度、0.2／0.4／0.6 s 直线根偏移、接触）；运行时每 0.1 s 按真实相对平台速度、碰撞切线约束后的目标预测未来轨迹，以归一化加权距离检索兼容姿态标签的所有帧，并保留延续余量。Walk／Run 独立检索，各自用原生 A／B AnimationNodeAnimation → TimeSeek → TimeScale → Blend2 从匹配时间播放，再由独立 Speed Blend2 按碰撞解算后相对平台的真实水平速度连续混合（默认 1.5／2.25／3 m/s 对应 Run 权重 0／0.5／1）；Shift 只改变物理目标，不直接切动画。零权重通道保持 sync 推进；另从接触上升沿估计循环相位原点，以混合周期行程计算共同步频，并通过 A/B 交叉混合对齐两步态相位，避免混合接触长期停留在半接触。接触曲线随最终骨骼一起混合；可变槽位节点逐角色深复制，检索库只读共享。原动画采样修改器位于 FootPlacement 之前，避免 IK 反馈。骨骼动画不驱动角色位移；平台运输不算步态速度。详见 [Motion Matching](../addons/motion/motion_matching/USAGE.md)。
+- `animations/mixamo.res` 存储统一到守卫骨架的动画与完整 RESET；重建工具 `addons/motion/tools/build_mixamo.gd` 一并生成动画库、播放图及检索库，不依赖 Blender。左右横移来自原 Mixamo 资源库；用户提供的 Run Forward 和异骨架后退按骨名及全局静止姿态重定向、保留守卫骨长，支持不同 Mixamo 命名空间。一般按原根行程校准播放时长；原地 Run 从支撑区鞋底后移速度估计周期步幅，库内按标准 6 m/s 标定约 0.468 s；控制器默认行走／跑步／蹲行 1.5／3／0.7 m/s，运行时按相应倍率播放，运行时 TimeScale 随速度参数调整。新增是横移／后退步行；Shift 下这些方向暂用步行加速，没有独立横向跑步资源。蹲行只有向前数据，仍向移动方向转身；没有八向、起停、转弯轨迹或脚步规划的完整数据覆盖。
+- `addons/motion/foot_placement/` 实现守卫骨架的 Foot Placement／Foot Lock：AnimationTree 先求值骨骼及离线估计的左右接触曲线，Skeleton3D 再按固定子节点顺序运行目标／骨盆修改器、两个独立 TwoBoneIK3D 和脚掌旋转修改器。二者使用 Manual 模式，在每个角色物理 tick 显式推进一次，不读取上一帧 IK 反馈。鞋底中心／脚跟／脚尖采样过滤自身和陡面；Swing／Approach／Contact／Stance／Release 分别由动画摆动、保持水平轨迹并临界阻尼修正高度、支撑局部 Hermite 减速、速度归零后捕获一次锁点、原有插值释放主导；默认 Contact 0.12 s，终点投影支撑平面。高度／朝向／水平锁定先合成为最终脚踝目标，原生 IK 不再重复乘接触权重；静态支撑锁世界变换，移动支撑锁平台局部变换。骨盆根据髋到目标的可达区间限幅降低，角色碰撞体和扰雾坐标不变。跳跃、查询失效、支撑改变、超限转向／锁距和传送均有清锁或释放策略；只支持世界 Y 朝上和当前守卫标定，不提供台阶自动跨越或脚步规划。参数、边界和检查路线见 [脚部说明](../addons/motion/foot_placement/USAGE.md)。
+- `addons/motion/demo.tscn` 保留低顶通道，并引用原生碰撞验证场：10／18／28 cm 方块、六级 12 cm 楼梯、三种半径球体、12° 纵坡／15° 横坡、平移并 yaw 的 AnimatableBody3D 平台。Tab／R 切换或复位检查点，F3／F4 切换调试和 IK，1／2 独立切换左右脚，面板显示阶段与权重、可调骨盆限幅；这些交互仅属于 demo，不接入主场景输入。
 - 接地行走由控制器在 `move_and_slide()` 前后采集真实脚底轨迹，经场景转发到各盒 `push_mist()`；按盒旋转转换世界轨迹，每批最多 16 个样本。独立 GPU 源项阶段只交换动量，产生前推、两侧分流及可调平面尾流，再由原 SWE 通量输送厚度；不生成／删除雾量，不依赖输入或模型朝向。静止、完全顶墙、空中不持续施力，0.8 m 高差外隔离；暂停期间的移动不缓存。体宽、耦合率与尾流强度在雾盒 Interaction / Movement 调整；森林未接入行走。物理依据及二维限制见[实验场指南](guides/playground.md#行走气流调研与二维近似)。
 - `scripts/fog_playground.gd` 将起跳事件以 `-takeoff_pull`（默认 −0.8）、落地事件以 `landing_push`（默认 +1）传给各盒的 `disturb_mist()`。只注入水平动量，厚度汇聚、堆积与扩散由 SWE 通量产生；保留每盒高度隔离，不叠加视觉清空／扩散环。
-- `scripts/camera/fog_playground_camera.gd` 继承第三方 `CameraHolder`，场景内覆盖其脚本。启动光标可见，物理 F 切换捕获／释放，Esc、窗口失焦或退出释放；单击、Ctrl 和重新获得焦点不捕获。释放时暂停状态机输入并停止水平移动，但仍执行重力、碰撞和真实落地事件，相机缩放同样仅在捕获时处理。
+- `addons/motion/motion_camera.gd` 使用原生 SpringArm3D 做碰撞避让和 Camera3D 环绕跟随。启动光标可见，物理 F 切换捕获／释放，Esc、窗口失焦或退出释放；单击、Ctrl 和重新获得焦点不捕获。释放时停止水平输入，但仍执行重力、动画、碰撞和真实落地事件，相机缩放仅在捕获时处理。缺失 Input Map 动作只在运行时补齐，不覆盖已有绑定。
 
 ## 森林角色与物理
 
@@ -79,9 +84,14 @@
 - addon 的 `bake_test.gd` 覆盖真实场景保存／加载不保留高度图、加载与重复进入场景自动采样新几何，以及上下层分离、旋转盒、跨顶斜面及失效／失败烘焙；`initialization_test.gd` 覆盖初态高度／厚度上限、无效格／高岩石、噪波缓存失效、平移／旋转盒世界场一致性、资产保存加载及旧字段迁移。
 - `natural_mist_test.gd` 用真实 Forward+ 画面检查低处有雾／高岩石露出、顶部软化、零风速稳定、旋转盒体的世界空间连续性和非零风速漂移，以及资源噪波频率确实影响静态与暂停的 SWE 初态、SWE 厚度纹理实际显示、旋转盒起跳坐标、外观编辑保留暂停状态和 GPU 资源重建、旋转盒运行时承载面缩小重烘焙后的周界通流；不把 headless 编译当作 shader 验证。
 - `swe_test.gd` 在一阶／二阶空间模式下验证真实 GPU 的带实体高边的静水平衡、干湿推进、实体高地阻挡、非负和质量，以及向内汇聚／向外冲量、跨高度隔离、强冲量与模拟时钟；并用独立正弦平移解析解检查输送误差和有界性。行走另覆盖两阶数／两轴的前推、分流、尾流、厚度重分布、质量／时钟、停步衰减、高度隔离及 30／60 Hz 提交一致性。开放边界覆盖带外部无承载留白的平台在两阶数／四个风向下的均匀通流、排空／充填，以及封闭孔洞的零风排出和按风向补入。`natural_mist_test.gd` 另检查切换阶数重置真实扰动场。
-- `tests/fog_playground_jump_test.gd` 从配置的主场景启动，验证真实第三方控制器跳跃／落地一次性事件、GPU 向内／向外动量和中心增厚／质量守恒，以及默认自由鼠标、F 双向切换、Esc／失焦释放、单击不捕获、释放期间仍可落地扰雾；另检查真实 WASD 行走的 GPU 顺行动量／质量守恒和暂停不回放行走。
+- `addons/motion/tests/motion_character_test.gd` 从独立原生示例场景验证真实输入行走／跑步、斜向限速、骨骼动画、Jump／Fall／接地、低顶蹲行与安全站起、双实例姿态隔离，以及释放鼠标仍受重力影响。
+- `addons/motion/tests/contact_transition_test.gd` 通过真实物理、原生接触曲线及最后一个修改器的最终骨骼输出，验证 60／120 Hz 落地减速的位置／速度衔接、刚性支撑坐标系平移与旋转、8 cm 地面高差、Approach 水平保真、减速中跳跃清除以及真实 Walk／Run 混合后的双脚静止支撑。
+- `addons/motion/tests/foot_placement_test.gd` 从真实 demo 的 `skeleton_updated` 回调读取最终骨骼，对照实际碰撞与解析台阶／坡面／球面验证脚部位置和朝向；覆盖前行／跑步／蹲行／可调步速及左右横移／后退的双脚支撑／摆动／释放、支撑期世界锁定、Approach 水平轨迹、楼梯真实下降、移动平台局部锚点、单腿开关、查询失效、自动传送清锁和实例隔离。不是仅检查 IK 目标节点或导出清单。
+- `addons/motion/tests/speed_blend_test.gd` 无窗口推进真实 AnimationTree／Skeleton3D，验证纯步行／纯跑步端点、三个中间速度和目标／实际速度不一致时的权重；独立 AnimationPlayer 对照原生骨骼，确认中间姿态确实混合，而不是只更新 UI 数值。
+- `addons/motion/tests/motion_matching_test.gd` 通过真实前／左／右／后及 Shift 输入验证匹配动作、保持面向相机的移动、停步；用独立 AnimationPlayer 直接对照最终手脚姿态，检查匹配片段和任意采样时间确实被播放，而非只更新诊断字符串。墙前停步与自由横移角色并发验证可移动轨迹预测、逐实例槽位隔离。
+- `tests/fog_playground_jump_test.gd` 从配置的主场景启动，验证真实 Motion 控制器跳跃／落地一次性事件、GPU 向内／向外动量和中心增厚／质量守恒，以及默认自由鼠标、F 双向切换、Esc／失焦释放、单击不捕获、释放期间仍可落地扰雾；另检查真实 WASD 行走的 GPU 顺行动量／质量守恒和暂停不回放行走。
 - `tests/forest_walk_test.gd` 在有焦点的图形窗口检查真实场景落地、W 行走与贴坡、跳跃落地及 GPU 动量注入、默认自由鼠标、物理 F／Esc 切换、单击不捕获及地图边界阻挡。`tools/profile_forest_swe.gd` 可重复测量固定视角的模拟暂停／运行／起跳负载。
-- `stable_fluid_test.gd` 验证真实 GPU 的静态初态、压力投影、尾流／高度隔离、有符号径向交互存续、独立仿射初态查值、远区保形／无定时复位、均匀基础厚度及材质输送、增益的 `[0,2]` 端点／半衰期／干格不生雾／随流输送／跨孔洞中性、旋转盒细尺度正弦长时间平移、四向开放入口、入口接缝／参考承载高度／反向风／入口噪波重建和跨孔洞回溯；从真实主场景验证 F2 双向切换同初态、暂停和重置。`tests/fog_playground_jump_test.gd -- --stable-fluids` 使用同一真实控制器检查新版起跳升高／落地压低、径向速度、材质坐标输送和暂停不回放。当前通过 Godot 4.7.2 / Forward+ / D3D12 / RTX 3070；原 SWE 和自然雾 GPU 回归亦通过。没有其他驱动验证或新后端性能预算保证。
+- `stable_fluid_test.gd` 验证真实 GPU 的静态初态、压力投影、尾流／高度隔离、有符号径向交互存续、独立仿射初态查值、远区保形／无定时复位、均匀基础厚度及材质输送、增益的 `[0,2]` 端点／半衰期／干格不生雾／随流输送／跨孔洞中性、旋转盒细尺度正弦长时间平移、四向开放入口、入口接缝／参考承载高度／反向风／入口噪波重建和跨孔洞回溯；从真实主场景验证 F2 双向切换同初态、暂停和重置。`tests/fog_playground_jump_test.gd -- --stable-fluids` 使用同一 Motion 控制器检查新版起跳升高／落地压低、径向速度、材质坐标输送和暂停不回放。当前通过 Godot 4.7.2 / Forward+ / D3D12 / RTX 3070；原 SWE 和自然雾 GPU 回归亦通过。没有其他驱动验证或新后端性能预算保证。
 - 已有 GPU 路径使用 Forward+ / D3D12 冒烟运行；纯风输送及可选二阶空间重建已做解析平移与实际图像 GPU 检查，复杂场景的边界外观仍由用户验证。headless 检查不替代 GPU 验证。没有性能预算保证，也未承诺所有视角无走样；盒边渐出不等同于内部孔洞的距离场过滤。
 - `doco/changes/` 与 `doco/tmp/` 的旧材料不代表当前实现，不作为启动或验证入口。
 

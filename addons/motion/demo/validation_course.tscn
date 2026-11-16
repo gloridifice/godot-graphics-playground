@@ -1,0 +1,224 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://addons/motion/demo/moving_platform.gd" id="1_platform"]
+
+[sub_resource type="StandardMaterial3D" id="Blocks"]
+albedo_color = Color(0.23, 0.57, 0.85, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="Steps"]
+albedo_color = Color(0.82, 0.52, 0.24, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="Spheres"]
+albedo_color = Color(0.56, 0.37, 0.72, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="Ramps"]
+albedo_color = Color(0.25, 0.66, 0.5, 1)
+roughness = 0.85
+
+[sub_resource type="SphereMesh" id="SmallSphereMesh"]
+material = SubResource("Spheres")
+radius = 0.55
+height = 1.1
+radial_segments = 48
+rings = 24
+
+[sub_resource type="SphereShape3D" id="SmallSphereShape"]
+radius = 0.55
+
+[sub_resource type="SphereMesh" id="MediumSphereMesh"]
+material = SubResource("Spheres")
+radius = 0.95
+height = 1.9
+radial_segments = 64
+rings = 32
+
+[sub_resource type="SphereShape3D" id="MediumSphereShape"]
+radius = 0.95
+
+[sub_resource type="SphereMesh" id="LargeSphereMesh"]
+material = SubResource("Spheres")
+radius = 1.35
+height = 2.7
+radial_segments = 64
+rings = 32
+
+[sub_resource type="SphereShape3D" id="LargeSphereShape"]
+radius = 1.35
+
+[sub_resource type="BoxMesh" id="PlatformMesh"]
+material = SubResource("Blocks")
+size = Vector3(2.8, 0.3, 2.6)
+
+[sub_resource type="BoxShape3D" id="PlatformShape"]
+size = Vector3(2.8, 0.3, 2.6)
+
+[node name="ValidationCourse" type="Node3D"]
+
+[node name="Blocks" type="Node3D" parent="."]
+
+[node name="Low" type="CSGBox3D" parent="Blocks"]
+position = Vector3(4, 0.05, -5)
+size = Vector3(0.7, 0.1, 0.8)
+material = SubResource("Blocks")
+use_collision = true
+
+[node name="Medium" type="CSGBox3D" parent="Blocks"]
+position = Vector3(4.8, 0.09, -6.2)
+size = Vector3(0.65, 0.18, 0.8)
+material = SubResource("Blocks")
+use_collision = true
+
+[node name="High" type="CSGBox3D" parent="Blocks"]
+position = Vector3(4, 0.14, -7.4)
+size = Vector3(0.8, 0.28, 0.9)
+material = SubResource("Blocks")
+use_collision = true
+
+[node name="SplitFeet" type="CSGBox3D" parent="Blocks"]
+position = Vector3(4.7, 0.09, -9)
+size = Vector3(0.35, 0.18, 1.4)
+material = SubResource("Blocks")
+use_collision = true
+
+[node name="Label" type="Label3D" parent="Blocks"]
+position = Vector3(7, 0.85, -8.8)
+billboard = 1
+font_size = 40
+pixel_size = 0.006
+text = "BLOCKS / split-foot heights\n10 / 18 / 28 cm"
+
+[node name="Stairs" type="Node3D" parent="."]
+
+[node name="Step1" type="CSGBox3D" parent="Stairs"]
+position = Vector3(0, 0.06, -11)
+size = Vector3(2.4, 0.12, 0.65)
+material = SubResource("Steps")
+use_collision = true
+
+[node name="Step2" type="CSGBox3D" parent="Stairs"]
+position = Vector3(0, 0.12, -11.65)
+size = Vector3(2.4, 0.24, 0.65)
+material = SubResource("Steps")
+use_collision = true
+
+[node name="Step3" type="CSGBox3D" parent="Stairs"]
+position = Vector3(0, 0.18, -12.3)
+size = Vector3(2.4, 0.36, 0.65)
+material = SubResource("Steps")
+use_collision = true
+
+[node name="Step4" type="CSGBox3D" parent="Stairs"]
+position = Vector3(0, 0.24, -12.95)
+size = Vector3(2.4, 0.48, 0.65)
+material = SubResource("Steps")
+use_collision = true
+
+[node name="Step5" type="CSGBox3D" parent="Stairs"]
+position = Vector3(0, 0.3, -13.6)
+size = Vector3(2.4, 0.6, 0.65)
+material = SubResource("Steps")
+use_collision = true
+
+[node name="Step6" type="CSGBox3D" parent="Stairs"]
+position = Vector3(0, 0.36, -14.25)
+size = Vector3(2.4, 0.72, 0.65)
+material = SubResource("Steps")
+use_collision = true
+
+[node name="Landing" type="CSGBox3D" parent="Stairs"]
+position = Vector3(0, 0.36, -15.4)
+size = Vector3(2.4, 0.72, 1.65)
+material = SubResource("Steps")
+use_collision = true
+
+[node name="Label" type="Label3D" parent="Stairs"]
+position = Vector3(-3.2, 1.5, -14.8)
+billboard = 1
+font_size = 40
+pixel_size = 0.006
+text = "STAIRS / 6 x 12 cm\nTab checkpoint: walk DOWN with W"
+
+[node name="Spheres" type="Node3D" parent="."]
+
+[node name="Small" type="StaticBody3D" parent="Spheres"]
+position = Vector3(-6, -0.25, -7)
+collision_mask = 2
+
+[node name="Mesh" type="MeshInstance3D" parent="Spheres/Small"]
+mesh = SubResource("SmallSphereMesh")
+
+[node name="Shape" type="CollisionShape3D" parent="Spheres/Small"]
+shape = SubResource("SmallSphereShape")
+
+[node name="Medium" type="StaticBody3D" parent="Spheres"]
+position = Vector3(-7, -0.4, -10)
+collision_mask = 2
+
+[node name="Mesh" type="MeshInstance3D" parent="Spheres/Medium"]
+mesh = SubResource("MediumSphereMesh")
+
+[node name="Shape" type="CollisionShape3D" parent="Spheres/Medium"]
+shape = SubResource("MediumSphereShape")
+
+[node name="Large" type="StaticBody3D" parent="Spheres"]
+position = Vector3(-5.5, -0.65, -13)
+collision_mask = 2
+
+[node name="Mesh" type="MeshInstance3D" parent="Spheres/Large"]
+mesh = SubResource("LargeSphereMesh")
+
+[node name="Shape" type="CollisionShape3D" parent="Spheres/Large"]
+shape = SubResource("LargeSphereShape")
+
+[node name="Label" type="Label3D" parent="Spheres"]
+position = Vector3(-5.5, 1.65, -14.2)
+billboard = 1
+font_size = 40
+pixel_size = 0.006
+text = "SPHERES / curved normals\nJump onto the exposed caps"
+
+[node name="Ramps" type="Node3D" parent="."]
+
+[node name="Pitch" type="CSGBox3D" parent="Ramps"]
+position = Vector3(7, 0.299, -12.7)
+rotation = Vector3(0.2094395, 0, 0)
+size = Vector3(3, 0.24, 4)
+material = SubResource("Ramps")
+use_collision = true
+
+[node name="CrossSlope" type="CSGBox3D" parent="Ramps"]
+position = Vector3(-8.5, 0.268, -15.5)
+rotation = Vector3(0, 0, 0.2617994)
+size = Vector3(3, 0.25, 3)
+material = SubResource("Ramps")
+use_collision = true
+
+[node name="Label" type="Label3D" parent="Ramps"]
+position = Vector3(7, 1.5, -15.2)
+billboard = 1
+font_size = 40
+pixel_size = 0.006
+text = "SLOPES / pitch 12 deg\nCross-slope 15 deg on the far left"
+
+[node name="MovingPlatform" type="AnimatableBody3D" parent="."]
+position = Vector3(8, 0.5, -3.5)
+collision_layer = 1
+collision_mask = 2
+process_physics_priority = -10
+script = ExtResource("1_platform")
+
+[node name="Geometry" type="MeshInstance3D" parent="MovingPlatform"]
+mesh = SubResource("PlatformMesh")
+
+[node name="Shape" type="CollisionShape3D" parent="MovingPlatform"]
+shape = SubResource("PlatformShape")
+
+[node name="Label" type="Label3D" parent="MovingPlatform"]
+position = Vector3(0, 0.85, -1.2)
+billboard = 1
+font_size = 40
+pixel_size = 0.006
+text = "MOVING PLATFORM\nTranslation + yaw / local anchors"

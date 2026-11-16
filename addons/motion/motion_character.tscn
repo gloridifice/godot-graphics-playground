@@ -1,0 +1,75 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://addons/motion/motion_character.gd" id="1_character"]
+[ext_resource type="Script" path="res://addons/motion/motion_camera.gd" id="2_camera"]
+[ext_resource type="PackedScene" path="res://addons/motion/assets/guard.scn" id="3_model"]
+[ext_resource type="AnimationLibrary" path="res://addons/motion/animations/mixamo.res" id="4_library"]
+[ext_resource type="AnimationNodeStateMachine" path="res://addons/motion/animations/locomotion.tres" id="5_machine"]
+[ext_resource type="Script" path="res://addons/motion/foot_placement/foot_placement.gd" id="6_feet"]
+[ext_resource type="Resource" path="res://addons/motion/foot_placement/guard.tres" id="7_foot_settings"]
+[ext_resource type="Script" path="res://addons/motion/motion_matching/matcher.gd" id="8_matching"]
+[ext_resource type="Resource" path="res://addons/motion/motion_matching/guard.res" id="9_database"]
+
+[sub_resource type="CapsuleShape3D" id="Capsule"]
+resource_local_to_scene = true
+radius = 0.35
+height = 2.1
+
+[sub_resource type="SphereShape3D" id="CameraShape"]
+radius = 0.18
+
+[sub_resource type="AnimationNodeStateMachinePlayback" id="Playback"]
+
+[node name="MotionCharacter" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 1
+floor_snap_length = 0.25
+floor_max_angle = 0.87266463
+script = ExtResource("1_character")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(0, 1.05, 0)
+shape = SubResource("Capsule")
+
+[node name="Visual" type="Node3D" parent="."]
+position = Vector3(0, 0.02, 0)
+rotation = Vector3(0, 3.1415927, 0)
+
+[node name="Model" parent="Visual" instance=ExtResource("3_model")]
+
+[node name="FootPlacement" type="SkeletonModifier3D" parent="Visual/Model/Skeleton3D"]
+script = ExtResource("6_feet")
+settings = ExtResource("7_foot_settings")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+root_node = NodePath("../Visual/Model")
+libraries = {
+&"": ExtResource("4_library")
+}
+
+[node name="AnimationTree" type="AnimationTree" parent="."]
+root_node = NodePath("../Visual/Model")
+callback_mode_process = 2
+tree_root = ExtResource("5_machine")
+anim_player = NodePath("../AnimationPlayer")
+parameters/playback = SubResource("Playback")
+
+[node name="MotionMatching" type="Node" parent="."]
+script = ExtResource("8_matching")
+database = ExtResource("9_database")
+
+[node name="CameraRig" type="Node3D" parent="."]
+position = Vector3(0, 1.55, 0)
+rotation = Vector3(-0.18, 0, 0)
+script = ExtResource("2_camera")
+
+[node name="SpringArm3D" type="SpringArm3D" parent="CameraRig"]
+collision_mask = 1
+shape = SubResource("CameraShape")
+spring_length = 4.5
+margin = 0.1
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig/SpringArm3D"]
+current = true
+fov = 65.0
+near = 0.1

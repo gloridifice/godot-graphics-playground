@@ -26,13 +26,13 @@ func _run() -> void:
 	current_scene = scene
 	root.grab_focus()
 	var player := scene.get_node_or_null("PlayerCharacter") as CharacterBody3D
-	if not _check(player != null, "F5 must load the fog playground and its third-party controller"):
+	if not _check(player != null, "F5 must load the fog playground and its native motion controller"):
 		quit(1)
 		return
 	var box := scene.get_node("FogFields/SpawnPlatformMist") as HeightfieldFogBox
 	var events: Array[String] = []
-	player.connect("mist_takeoff", func(_feet: Vector3): events.append("takeoff"))
-	player.connect("mist_landed", func(_feet: Vector3): events.append("landed"))
+	player.connect("jumped", func(_feet: Vector3): events.append("takeoff"))
+	player.connect("landed", func(_feet: Vector3): events.append("landed"))
 	for i in 300:
 		await process_frame
 		if player.is_on_floor() and box.swe_metrics().ready:
@@ -44,11 +44,11 @@ func _run() -> void:
 	_check(events.is_empty(), "initial floor contact must not create a landing impulse")
 	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "startup leaves the cursor free")
 	var start := player.position
-	Input.action_press("play_char_move_forward_action")
-	Input.action_press("play_char_jump_action")
+	Input.action_press("move_forward")
+	Input.action_press("jump")
 	await _physics_steps(10)
-	Input.action_release("play_char_move_forward_action")
-	Input.action_release("play_char_jump_action")
+	Input.action_release("move_forward")
+	Input.action_release("jump")
 	_check(player.position.distance_to(start)<0.02 and events.is_empty(), "free cursor blocks movement and jump inputs, not gravity")
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
@@ -62,12 +62,12 @@ func _run() -> void:
 	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "physical F enters control")
 	var feet: Vector3 = player.get_feet_position()
 	var before := await _snapshot(box)
-	Input.action_press("play_char_jump_action")
+	Input.action_press("jump")
 	for i in 30:
 		await physics_frame
 		if player.position.y > start.y+0.03:
 			break
-	# Hold through the gather measurement; the controller supports variable jump height.
+	# Sample after the accepted takeoff has reached the real GPU solver.
 	await _physics_steps(5)
 	var gathered := await _snapshot(box)
 	_check(player.position.y > start.y+0.1 and events == ["takeoff"], "an accepted grounded jump emits exactly one takeoff")
@@ -78,7 +78,7 @@ func _run() -> void:
 		_check(_center_height(box,gathered,feet)>_center_height(box,before,feet)+0.005,"Stable Fluids takeoff lifts the actual output height with a temporary gain")
 	else:
 		_check(_center_height(box,gathered,feet)>_center_height(box,before,feet)+0.005, "takeoff physically gathers layer thickness beneath the character")
-	Input.action_release("play_char_jump_action")
+	Input.action_release("jump")
 	await _key(KEY_F)
 	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "F also exits control while airborne")
 	for i in 150:
@@ -112,9 +112,9 @@ func _run() -> void:
 	var walking_start := await _snapshot(box)
 	box.swe_paused = true
 	await _key(KEY_F)
-	Input.action_press("play_char_move_forward_action")
+	Input.action_press("move_forward")
 	await _physics_steps(8)
-	Input.action_release("play_char_move_forward_action")
+	Input.action_release("move_forward")
 	await _key(KEY_ESCAPE)
 	box.swe_paused = false
 	await _physics_steps(6)
@@ -127,9 +127,9 @@ func _run() -> void:
 	_check(pause_error<0.00001,"walking while paused does not queue a delayed force on resume")
 	var walking_feet: Vector3 = player.get_feet_position()
 	await _key(KEY_F)
-	Input.action_press("play_char_move_forward_action")
+	Input.action_press("move_forward")
 	await _physics_steps(20)
-	Input.action_release("play_char_move_forward_action")
+	Input.action_release("move_forward")
 	var walking_end: Vector3 = player.get_feet_position()
 	await _key(KEY_ESCAPE)
 	var walked := await _snapshot(box)

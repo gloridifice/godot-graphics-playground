@@ -32,4 +32,4 @@
 - 输入组件在运行时补齐缺失的 `play_char_*` 动作，并输出对应警告；不会写入 `project.godot`。默认 WASD／方向键移动、Shift 跑步、空格跳跃，其他操作见上游 README。
 - 注意：上游相机启动即捕获鼠标，**Ctrl** 切换释放／捕获。这与本项目森林示例的 **F / Esc** 约定不同。
 
-本目录保留上游脚本行为。项目主场景为 `scenes/fog_playground.tscn`，通过项目内的 `scripts/player/fog_playground_player.gd` 和 `scripts/camera/fog_playground_camera.gd` 子类，额外接入 SWE 起跳汇聚／落地扩散，并改为默认自由鼠标、F 切换控制、Esc／失焦释放；没有直接修改本目录控制器／相机源码。森林仍使用独立的 `scenes/player.tscn`。
+本目录保留上游脚本行为。项目主场景 `scenes/fog_playground.tscn` 仅沿用本目录测试地图布局和地面贴图，角色／相机改由独立的 `addons/motion/` 原生控制器与 Mixamo 模型实现，场景脚本转发行走／起跳／落地信号到雾盒；没有直接修改本目录控制器／相机源码。森林仍使用独立的 `scenes/player.tscn`。

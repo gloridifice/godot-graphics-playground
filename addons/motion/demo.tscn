@@ -1,0 +1,154 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="PackedScene" path="res://addons/motion/motion_character.tscn" id="1_player"]
+[ext_resource type="PackedScene" path="res://addons/motion/demo/validation_course.tscn" id="2_course"]
+[ext_resource type="Script" path="res://addons/motion/demo/demo.gd" id="3_demo"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
+sky_top_color = Color(0.24, 0.38, 0.55, 1)
+sky_horizon_color = Color(0.68, 0.75, 0.8, 1)
+ground_horizon_color = Color(0.68, 0.75, 0.8, 1)
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMaterial")
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 2
+sky = SubResource("Sky")
+ambient_light_source = 3
+ambient_light_color = Color(0.8, 0.86, 1, 1)
+ambient_light_energy = 0.65
+tonemap_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="GroundMaterial"]
+albedo_color = Color(0.27, 0.34, 0.32, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="CourseMaterial"]
+albedo_color = Color(0.8, 0.54, 0.25, 1)
+roughness = 0.8
+
+[sub_resource type="BoxMesh" id="FloorMesh"]
+material = SubResource("GroundMaterial")
+size = Vector3(40, 0.4, 40)
+
+[sub_resource type="BoxShape3D" id="FloorShape"]
+size = Vector3(40, 0.4, 40)
+
+[sub_resource type="BoxMesh" id="RoofMesh"]
+material = SubResource("CourseMaterial")
+size = Vector3(3, 0.5, 4)
+
+[sub_resource type="BoxShape3D" id="RoofShape"]
+size = Vector3(3, 0.5, 4)
+
+[sub_resource type="StyleBoxFlat" id="Panel"]
+bg_color = Color(0.025, 0.04, 0.055, 0.84)
+content_margin_left = 12.0
+content_margin_top = 8.0
+content_margin_right = 12.0
+content_margin_bottom = 8.0
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_left = 5
+corner_radius_bottom_right = 5
+
+[node name="MotionDemo" type="Node3D"]
+script = ExtResource("3_demo")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation = Vector3(-0.9, -0.6, 0)
+light_energy = 1.4
+shadow_enabled = true
+
+[node name="Floor" type="StaticBody3D" parent="."]
+position = Vector3(0, -0.2, 0)
+collision_mask = 2
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("FloorMesh")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("FloorShape")
+
+[node name="TunnelRoof" type="StaticBody3D" parent="."]
+position = Vector3(-3, 1.9, -6)
+collision_mask = 2
+
+[node name="Mesh" type="MeshInstance3D" parent="TunnelRoof"]
+mesh = SubResource("RoofMesh")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TunnelRoof"]
+shape = SubResource("RoofShape")
+
+[node name="ValidationCourse" parent="." instance=ExtResource("2_course")]
+
+[node name="Player" parent="." instance=ExtResource("1_player")]
+position = Vector3(0, 0.05, 0)
+
+[node name="Controls" type="CanvasLayer" parent="."]
+
+[node name="Hint" type="Label" parent="Controls"]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 1250.0
+offset_bottom = 90.0
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 20
+text = "MOTION / Motion Matching + Foot Placement\nF: control / release | Esc: release | W: forward | A/D: strafe | S: back | Shift: run | Space: jump | Ctrl: crouch\nTab: next terrain checkpoint | R: reset checkpoint | F3: debug | F4: IK on/off | 1/2: left/right"
+
+[node name="FootPanel" type="PanelContainer" parent="Controls"]
+offset_left = 20.0
+offset_top = 122.0
+offset_right = 430.0
+theme_override_styles/panel = SubResource("Panel")
+
+[node name="Rows" type="VBoxContainer" parent="Controls/FootPanel"]
+layout_mode = 2
+
+[node name="Enabled" type="CheckButton" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Foot placement + lock (F4)"
+
+[node name="Debug" type="CheckButton" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+focus_mode = 0
+text = "Draw foot IK debug (F3)"
+
+[node name="Legs" type="HBoxContainer" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+
+[node name="Left" type="CheckButton" parent="Controls/FootPanel/Rows/Legs"]
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Left (1)"
+
+[node name="Right" type="CheckButton" parent="Controls/FootPanel/Rows/Legs"]
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Right (2)"
+
+[node name="PelvisLabel" type="Label" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+text = "Maximum pelvis drop: 0 ... 0.35 m"
+
+[node name="PelvisLimit" type="HSlider" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+focus_mode = 0
+max_value = 0.35
+step = 0.01
+value = 0.25
+
+[node name="Status" type="Label" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Sampling feet..."

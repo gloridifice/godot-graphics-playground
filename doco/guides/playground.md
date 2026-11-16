@@ -1,6 +1,6 @@
 # 局部高度雾实验场
 
-用 Godot 4.7.2 打开项目，按 **F5** 启动 `scenes/fog_playground.tscn`：默认自由鼠标，按 **F** 进入／退出控制，**Esc** 或失焦释放。WASD 移动、Shift 跑步、空格跳跃；接地行走推开前方／两侧雾气并拖出尾流，起跳脚下汇聚，落地向外扩散，均作用于真实 SWE 状态。
+用 Godot 4.7.2 打开项目，按 **F5** 启动 `scenes/fog_playground.tscn`：默认自由鼠标，按 **F** 进入／退出控制，**Esc** 或失焦释放。WASD 相机相对移动，站立时 A／D 横移、S 后退，按住 Shift 加速、空格跳跃、按住 Ctrl 蹲伏／蹲行；主场景角色来自原生 [Motion 模块](../../addons/motion/USAGE.md)。接地行走推开前方／两侧雾气并拖出尾流，起跳脚下汇聚，落地向外扩散，均作用于真实 SWE 状态。
 
 运行中按 **F2** 在 SWE / Stable Fluids 间切换，左下角显示当前后端。切换会将全部雾盒重置到同一资源初态。Stable Fluids 使用二维不可压空气与独立近地径向交互驱动采样坐标，适合观察漂移、尾流和起跳／落地对噪波的向内／向外搬运。基础厚度沿轨迹保留来源值；起跳挑高、落地压低由独立可恢复的高度乘数实现，不依赖 SWE 式水平压缩增厚。要直接启动新版：
 
@@ -28,9 +28,9 @@ Stable Fluids 的高度乘数 `G` 直接编码于 `[0,2]`，最终厚度乘 `G`�
 
 ## CSG 雾实验场
 
-**F5** 或打开 `scenes/fog_playground.tscn` 按 **F6**，体验基于第三方控制器测试地图的主场景与三片局部雾：基础平台、斜坡和出生高台。默认不捕获鼠标，**F** 切换控制／释放，**Esc** 或失焦释放；单击、Ctrl 或重新获得焦点不捕获。释放时不接受移动／跳跃／镜头输入，但保留重力、碰撞和落地扰雾。
+**F5** 或打开 `scenes/fog_playground.tscn` 按 **F6**，体验使用 Mixamo 角色、Motion Matching 和 Godot 原生动画状态机的主场景与三片局部雾；地形仍沿用第三方测试地图。三片雾分别覆盖：基础平台、斜坡和出生高台。默认不捕获鼠标，**F** 切换控制／释放，**Esc** 或失焦释放；单击、Ctrl 或重新获得焦点不捕获。释放时不接受移动／跳跃／镜头输入，但保留重力、碰撞和落地扰雾。
 
-`FogFields` 下三个节点可独立移动、调整 Size、Initialization 和外观；当前均使用贴承载面的薄层，也可开启 Horizontal Top 改用水平雾顶。三片雾均开启 SWE，并有自然密度漂移。真实接地起跳会向脚下施加向内动量，使雾汇聚；落地施加向外动量，使雾扩散。初次出生接地、二段空中跳跃不施加地面冲量；高差 1.5 m 外的雾不受影响。根节点 **Player Mist Interaction** 的 **Takeoff Pull**（默认 0.8）与 **Landing Push**（默认 1）调整两种强度，设为 0 可分别关闭；作用范围及速度由各盒 **Jump Radius / Jump Speed** 控制。不额外生成或删除雾量。
+`FogFields` 下三个节点可独立移动、调整 Size、Initialization 和外观；当前均使用贴承载面的薄层，也可开启 Horizontal Top 改用水平雾顶。三片雾均开启 SWE，并有自然密度漂移。真实接地起跳会向脚下施加向内动量，使雾汇聚；落地施加向外动量，使雾扩散。初次出生接地不施加地面冲量；Motion 不支持空中二段跳；高差 1.5 m 外的雾不受影响。根节点 **Player Mist Interaction** 的 **Takeoff Pull**（默认 0.8）与 **Landing Push**（默认 1）调整两种强度，设为 0 可分别关闭；作用范围及速度由各盒 **Jump Radius / Jump Speed** 控制。不额外生成或删除雾量。
 
 在雾盒的 **Simulation** 分组开启 **SWE Editor Enabled**，可直接在编辑器预演重力、风输送及边界补雾；开启与关闭都会重置场，关闭回到静态初态。默认关闭，与运行时 **SWE Enabled** 独立；**SWE Paused** 可暂停并保留预览状态。若需减轻风输送导致的细节模糊，可开启 **SWE Second Order** 试用 MC 限制器的二阶空间重建；默认关闭，切换时重置物理场、保留噪波显示相位，编辑器与运行时均适用，GPU 成本更高。
 
@@ -90,7 +90,15 @@ Stable Fluids 的高度乘数 `G` 直接编码于 `[0,2]`，最终厚度乘 `G`�
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://addons/heightfield_fog/swe_test.gd --max-fps 120
 # 自然薄雾及 SWE 输出纹理的真实 GPU 行为验证。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://addons/heightfield_fog/natural_mist_test.gd --max-fps 60
-# 主场景：同一真实控制器，SWE 验证动量／质量，Stable Fluids 验证径向速度／坐标搬运及起跳升高／落地压低。
+# Motion：真实输入、骨骼动画、低顶蹲行／站起和多实例隔离。
+& G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://addons/motion/tests/motion_character_test.gd --max-fps 60
+# P0 落地衔接：无窗口验证实际骨骼的接触减速、支撑坐标和混合步态。
+& G:\Tools\Godot_mono_v4.7.2\godot_console.exe --headless --path . --script res://addons/motion/tests/contact_transition_test.gd
+# Walk／Run 按实际速度混合：无窗口验证端点及中间原生骨骼姿态。
+& G:\Tools\Godot_mono_v4.7.2\godot_console.exe --headless --path . --script res://addons/motion/tests/speed_blend_test.gd
+# Motion Matching：四向／Shift 匹配的真实播放姿态、墙前停步和并发槽位隔离。
+& G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://addons/motion/tests/motion_matching_test.gd --max-fps 60
+# 主场景：同一 Motion 控制器，SWE 验证动量／质量，Stable Fluids 验证径向速度／坐标搬运及起跳升高／落地压低。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://tests/fog_playground_jump_test.gd --max-fps 60
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://tests/fog_playground_jump_test.gd --max-fps 60 -- --stable-fluids
 # 森林：需要有焦点的图形窗口，验证默认自由鼠标、物理 F／Esc、行走、跳跃和边界。
