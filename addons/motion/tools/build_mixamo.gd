@@ -1,5 +1,5 @@
 extends SceneTree
-## Rebuild native resources from the bundled, matching Mixamo skeletons.
+## Rebuild native resources, retargeting bundled Mixamo clips to the Guard skeleton.
 ## godot --headless --path . --script res://addons/motion/tools/build_mixamo.gd
 
 const ROOT := "res://addons/motion/"
@@ -7,10 +7,14 @@ const SOURCES := {
 	"Idle": "idle", "Walk": "character", "Run": "run", "Jump": "jump",
 	"Fall": "fall", "CrouchIdle": "crouch_idle", "CrouchWalk": "crouch_walk",
 	"StrafeLeft": "strafe_left", "StrafeRight": "strafe_right", "WalkBack": "walk_back",
+	"RunLeft": "run_left", "RunRight": "run_right", "RunBack": "run_back",
 }
 
 # Canonical bake speeds; runtime TimeScale adapts to the configured controller speeds.
-const LOCOMOTION_SPEEDS := {"Walk": 3.0, "Run": 6.0, "CrouchWalk": 1.4, "StrafeLeft": 3.0, "StrafeRight": 3.0, "WalkBack": 3.0}
+const LOCOMOTION_SPEEDS := {"Walk": 3.0, "Run": 6.0, "CrouchWalk": 1.4, "StrafeLeft": 3.0, "StrafeRight": 3.0, "WalkBack": 3.0, "RunLeft": 6.0, "RunRight": 6.0, "RunBack": 6.0}
+# Authored model-space travel axes for the downloaded in-place running clips.
+# These are bake metadata, not a direction-to-animation switch in the matcher.
+const IN_PLACE_DIRECTIONS := {"Run": Vector2(0, 1), "RunLeft": Vector2(1, 0), "RunRight": Vector2(-1, 0), "RunBack": Vector2(0, -1)}
 const BAKE := preload("res://addons/motion/motion_matching/bake.gd")
 
 func _initialize() -> void:
@@ -27,7 +31,7 @@ func _build() -> void:
 		root.add_child(source)
 		var player := source.get_node("AnimationPlayer") as AnimationPlayer
 		var animation := player.get_animation("mixamo_com").duplicate() as Animation
-		if name in ["Run", "StrafeLeft", "StrafeRight", "WalkBack"]:
+		if name in IN_PLACE_DIRECTIONS or name in ["StrafeLeft", "StrafeRight", "WalkBack"]:
 			animation = _retarget(source, animation, target_skeleton)
 		animation.resource_name = name
 		animation.loop_mode = Animation.LOOP_NONE if name == "Jump" else Animation.LOOP_LINEAR
@@ -51,9 +55,11 @@ func _build() -> void:
 					if name in ["Jump", "Fall"]:
 						position.y = rest.y
 					animation.track_set_key_value(track, key, position)
-		if name == "Run" and travel.length() < 0.01:
-			# User's Run Forward is in-place: recover its stride from planted-foot motion.
-			travel = Vector2(0.0, _in_place_stride(animation, reference))
+		if name in IN_PLACE_DIRECTIONS and travel.length() < 0.01:
+			# In-place clips have no root displacement. Recover stride along their
+			# authored axis; z-only calibration would turn side/back runs into idle.
+			var direction: Vector2 = IN_PLACE_DIRECTIONS[name]
+			travel = direction * _in_place_stride(animation, reference, direction)
 		if name in LOCOMOTION_SPEEDS and travel.length() > 0.01:
 			_retime(animation, travel.length() / LOCOMOTION_SPEEDS[name] / animation.length)
 		if name in LOCOMOTION_SPEEDS:
@@ -65,6 +71,12 @@ func _build() -> void:
 			quit(1)
 			return
 		source.free()
+	# Procedural climbing starts from a static full-body pose, not a locomotion clip.
+	var climb_pose := library.get_animation("RESET").duplicate() as Animation
+	climb_pose.resource_name = "Climb"
+	climb_pose.length = 1.0
+	climb_pose.loop_mode = Animation.LOOP_LINEAR
+	library.add_animation("Climb", climb_pose)
 	if ResourceSaver.save(library, ROOT + "animations/mixamo.res", ResourceSaver.FLAG_COMPRESS) != OK:
 		quit(1)
 		return
@@ -74,12 +86,13 @@ func _build() -> void:
 	machine.add_node("Crouch", _matching_tree("CrouchIdle"), Vector2(330, 290))
 	machine.add_node("Jump", _clip("Jump"), Vector2(570, 100))
 	machine.add_node("Fall", _clip("Fall"), Vector2(570, 290))
+	machine.add_node("Climb", _clip("Climb"), Vector2(800, 180))
 	machine.set_node_position("Start", Vector2(100, 100))
 	var start := AnimationNodeStateMachineTransition.new()
 	start.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_AUTO
 	machine.add_transition("Start", "Grounded", start)
-	for from: String in ["Grounded", "Crouch", "Jump", "Fall"]:
-		for to: String in ["Grounded", "Crouch", "Jump", "Fall"]:
+	for from: String in ["Grounded", "Crouch", "Jump", "Fall", "Climb"]:
+		for to: String in ["Grounded", "Crouch", "Jump", "Fall", "Climb"]:
 			if from == to:
 				continue
 			var transition := AnimationNodeStateMachineTransition.new()
@@ -156,7 +169,7 @@ func _retarget(source: Node3D, original: Animation, target: Skeleton3D) -> Anima
 	player.stop()
 	return result
 
-func _in_place_stride(animation: Animation, model: Node3D) -> float:
+func _in_place_stride(animation: Animation, model: Node3D, direction: Vector2) -> float:
 	var skeleton := model.get_node("Skeleton3D") as Skeleton3D
 	var player := model.get_node("AnimationPlayer") as AnimationPlayer
 	var library := AnimationLibrary.new()
@@ -178,16 +191,17 @@ func _in_place_stride(animation: Animation, model: Node3D) -> float:
 		for point in points:
 			floor_y = minf(floor_y, point.y)
 		for frame in range(1, points.size()):
-			var speed := -(points[frame].z - points[frame - 1].z) * count / animation.length
+			var displacement := Vector2(points[frame].x - points[frame - 1].x, points[frame].z - points[frame - 1].z)
+			var speed := -displacement.dot(direction) * count / animation.length
 			var weight := 1.0 - smoothstep(floor_y + 0.015, floor_y + 0.055, (points[frame].y + points[frame - 1].y) * 0.5)
 			if speed > 0.05:
 				total_speed += speed * weight
 				total_weight += weight
 	player.stop()
 	player.remove_animation_library("stride_bake")
-	assert(total_weight > 0.01, "In-place Run needs usable planted-foot motion for stride calibration.")
+	assert(total_weight > 0.01, "In-place %s needs usable planted-foot motion for stride calibration." % animation.resource_name)
 	var stride := total_speed / total_weight * animation.length
-	print("Motion: in-place Run stride=", stride, "m, calibrated duration=", stride / LOCOMOTION_SPEEDS.Run, "s")
+	print("Motion: in-place ", animation.resource_name, " stride=", stride, "m, axis=", direction, ", calibrated duration=", stride / LOCOMOTION_SPEEDS[animation.resource_name], "s")
 	return stride
 
 func _reset_pose(skeleton: Skeleton3D) -> Animation:
@@ -260,16 +274,23 @@ func _add_contacts(name: String, animation: Animation, source: Node3D) -> void:
 
 func _ground_tree() -> AnimationNodeBlendTree:
 	var tree := AnimationNodeBlendTree.new()
-	tree.add_node("Walk", _matching_tree("Idle"), Vector2(0, 0))
-	tree.add_node("Run", _matching_tree("Run"), Vector2(0, 200))
+	for gait in ["Walk", "Run"]:
+		var y := 0.0 if gait == "Walk" else 400.0
+		tree.add_node(gait, _matching_tree("Idle" if gait == "Walk" else "Run"), Vector2(0, y))
+		tree.add_node(gait + "Side", _matching_tree("StrafeLeft" if gait == "Walk" else "RunLeft"), Vector2(0, y + 180))
+		var direction := AnimationNodeBlend2.new()
+		direction.sync = true
+		tree.add_node(gait + "Direction", direction, Vector2(250, y + 90))
+		tree.connect_node(gait + "Direction", 0, gait)
+		tree.connect_node(gait + "Direction", 1, gait + "Side")
 	var speed := AnimationNodeBlend2.new()
 	# Keep the zero-weight gait advancing, so entering the blend never resumes a stale frame.
 	speed.sync = true
-	tree.add_node("Speed", speed, Vector2(250, 100))
-	tree.connect_node("Speed", 0, "Walk")
-	tree.connect_node("Speed", 1, "Run")
+	tree.add_node("Speed", speed, Vector2(500, 300))
+	tree.connect_node("Speed", 0, "WalkDirection")
+	tree.connect_node("Speed", 1, "RunDirection")
 	tree.connect_node("output", 0, "Speed")
-	tree.set_node_position("output", Vector2(500, 100))
+	tree.set_node_position("output", Vector2(750, 300))
 	return tree
 
 func _matching_tree(idle: String) -> AnimationNodeBlendTree:

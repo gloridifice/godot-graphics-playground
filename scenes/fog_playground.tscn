@@ -2,9 +2,11 @@
 
 [ext_resource type="Texture2D" uid="uid://nu6btp05qtin" path="res://addons/JehenoThirdPersonController/Arts/godot-prototype-texture/PNG/grid_1024x1024/grid_black_1024x1024.png" id="1_1ow5t"]
 [ext_resource type="PackedScene" path="res://addons/motion/motion_character.tscn" id="2_kw53q"]
+[ext_resource type="Script" path="res://addons/motion/ui/motion_matching_view.gd" id="6_matching_view"]
 [ext_resource type="Script" uid="uid://puj1iwmxwbme" path="res://scripts/fog_playground.gd" id="3_fog_playground"]
 [ext_resource type="Script" uid="uid://c4qkoieuiid0l" path="res://addons/heightfield_fog/heightfield_fog_box.gd" id="4_fog_box"]
 [ext_resource type="Script" uid="uid://25coo06v615h" path="res://addons/heightfield_fog/initialization.gd" id="5_fog_initialization"]
+[ext_resource type="PackedScene" path="res://addons/motion/demo/climbing_course.tscn" id="7_climbing"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_6f4by"]
 sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
@@ -162,6 +164,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2, -6)
 polygon = PackedVector2Array(0, 0, 0, 2, 6, 0)
 depth = 6.0
 
+[node name="ClimbingCourse" parent="." instance=ExtResource("7_climbing")]
+
 [node name="FogFields" type="Node3D" parent="." unique_id=1255730462]
 
 [node name="GroundMist" type="Node3D" parent="FogFields" unique_id=1756978656]
@@ -217,6 +221,21 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 6, -18)
 
 [node name="Controls" type="CanvasLayer" parent="." unique_id=1290473374]
 
+[node name="MotionMatching" type="Control" parent="Controls"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -440.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 570.0
+grow_horizontal = 0
+scale = Vector2(0.6666667, 0.6666667)
+pivot_offset = Vector2(420, 0)
+mouse_filter = 2
+script = ExtResource("6_matching_view")
+character_path = NodePath("../../PlayerCharacter")
+
 [node name="Hint" type="Label" parent="Controls" unique_id=1811348315]
 anchors_preset = 2
 anchor_top = 1.0
@@ -225,8 +244,10 @@ offset_left = 16.0
 offset_top = -36.0
 offset_right = 1200.0
 offset_bottom = -10.0
+scale = Vector2(0.6666667, 0.6666667)
+pivot_offset = Vector2(0, 26)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
 theme_override_font_sizes/font_size = 18
-text = "F: control / release  |  Esc: release  |  WASD: walk  |  Shift: run  |  Space: jump  |  Ctrl: crouch"
+text = "F: control / release  |  ESC: release + detach until landing  |  WASD: move / climb  |  Space: jump / auto grab  |  Shift: run  |  Ctrl: crouch"

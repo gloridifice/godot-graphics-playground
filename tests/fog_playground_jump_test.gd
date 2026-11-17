@@ -4,8 +4,13 @@ extends SceneTree
 var failures := 0
 var _report: Dictionary = {}
 var _stable := false
+var _interactive := "--interactive-input" in OS.get_cmdline_user_args()
+var _controls := preload("res://addons/motion/tests/control_driver.gd").new()
 
 func _initialize() -> void:
+	if not _interactive:
+		root.unfocusable = true
+		root.add_child(_controls)
 	_run.call_deferred()
 
 func _run() -> void:
@@ -24,11 +29,12 @@ func _run() -> void:
 				field.rotation.y = 0.45
 	root.add_child(scene)
 	current_scene = scene
-	root.grab_focus()
-	var player := scene.get_node_or_null("PlayerCharacter") as CharacterBody3D
+	if _interactive: root.grab_focus()
+	var player := scene.get_node_or_null("PlayerCharacter") as MotionCharacter
 	if not _check(player != null, "F5 must load the fog playground and its native motion controller"):
 		quit(1)
 		return
+	if not _interactive: _controls.bind(player)
 	var box := scene.get_node("FogFields/SpawnPlatformMist") as HeightfieldFogBox
 	var events: Array[String] = []
 	player.connect("jumped", func(_feet: Vector3): events.append("takeoff"))
@@ -59,7 +65,7 @@ func _run() -> void:
 	Input.parse_input_event(release)
 	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "clicking does not capture the cursor")
 	await _key(KEY_F)
-	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "physical F enters control")
+	_check(Input.mouse_mode == (Input.MOUSE_MODE_CAPTURED if _interactive else Input.MOUSE_MODE_VISIBLE), "interactive or cursor-free scripted input enters control")
 	var feet: Vector3 = player.get_feet_position()
 	var before := await _snapshot(box)
 	Input.action_press("jump")
@@ -97,14 +103,15 @@ func _run() -> void:
 		_check(absf(_mass(landed)-_mass(before))/_mass(before)<0.001 and landed.faults==0, "both interactions transport mass without creating/deleting fog")
 	await _physics_steps(12)
 	_check(events.size()==2, "resting on the floor does not repeatedly inject impulses")
-	await _key(KEY_F)
-	await _key(KEY_ESCAPE)
-	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "Esc releases control")
-	await _key(KEY_F)
-	root.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
-	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "window focus loss releases control")
-	root.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_IN)
-	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "focus regain does not capture the cursor")
+	if _interactive:
+		await _key(KEY_F)
+		await _key(KEY_ESCAPE)
+		_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "Esc releases control")
+		await _key(KEY_F)
+		root.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
+		_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "window focus loss releases control")
+		root.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_IN)
+		_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "focus regain does not capture the cursor")
 	# Distinct transport risk: real collision-resolved WASD motion must reach the GPU.
 	# Reset interaction state; gravity remains suppressed for the SWE walking case.
 	box.reset_swe()
@@ -155,8 +162,13 @@ func _physics_steps(count: int) -> void:
 	for i in count:
 		await physics_frame
 	await process_frame
+	if not _interactive: _check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "GPU automation never captures the mouse")
 
 func _key(code: Key) -> void:
+	if not _interactive:
+		_controls.set_enabled(not _controls.enabled if code == KEY_F else false)
+		await _physics_steps(4)
+		return
 	var event := InputEventKey.new()
 	event.physical_keycode = code
 	event.pressed = true

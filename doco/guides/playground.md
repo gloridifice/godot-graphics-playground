@@ -91,18 +91,19 @@ Stable Fluids 的高度乘数 `G` 直接编码于 `[0,2]`，最终厚度乘 `G`�
 # 自然薄雾及 SWE 输出纹理的真实 GPU 行为验证。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://addons/heightfield_fog/natural_mist_test.gd --max-fps 60
 # Motion：真实输入、骨骼动画、低顶蹲行／站起和多实例隔离。
-& G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://addons/motion/tests/motion_character_test.gd --max-fps 60
+& G:\Tools\Godot_mono_v4.7.2\godot_console.exe --headless --path . --script res://addons/motion/tests/motion_character_test.gd
 # P0 落地衔接：无窗口验证实际骨骼的接触减速、支撑坐标和混合步态。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --headless --path . --script res://addons/motion/tests/contact_transition_test.gd
 # Walk／Run 按实际速度混合：无窗口验证端点及中间原生骨骼姿态。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --headless --path . --script res://addons/motion/tests/speed_blend_test.gd
 # Motion Matching：四向／Shift 匹配的真实播放姿态、墙前停步和并发槽位隔离。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://addons/motion/tests/motion_matching_test.gd --max-fps 60
-# 主场景：同一 Motion 控制器，SWE 验证动量／质量，Stable Fluids 验证径向速度／坐标搬运及起跳升高／落地压低。
+# 主场景：无捕获的脚本输入与不可聚焦窗口；SWE 验证动量／质量，Stable Fluids 验证径向速度／坐标搬运及起跳升高／落地压低。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://tests/fog_playground_jump_test.gd --max-fps 60
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://tests/fog_playground_jump_test.gd --max-fps 60 -- --stable-fluids
-# 森林：需要有焦点的图形窗口，验证默认自由鼠标、物理 F／Esc、行走、跳跃和边界。
-& G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://tests/forest_walk_test.gd --max-fps 60
+# 森林：仅供用户显式选择的交互鼠标测试，会捕获光标；不要在自动化中运行。
+# 未指定 --interactive-input 时拒绝运行并返回 2。
+& G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --script res://tests/forest_walk_test.gd --max-fps 60 -- --interactive-input
 # 有限帧真实 GPU 冒烟运行，使用当前主场景。
 & G:\Tools\Godot_mono_v4.7.2\godot_console.exe --path . --quit-after 120 --max-fps 60
 ```

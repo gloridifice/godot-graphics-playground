@@ -18,6 +18,7 @@ extends Resource
 # Critically damped approach response; target height and weight retain their velocities.
 @export_range(1.0, 40.0, 0.5) var approach_speed: float = 14.0
 @export_range(0.04, 0.25, 0.01) var contact_duration: float = 0.12
+# Inverse duration of the C1 residual release; existing resources keep their timing.
 @export_range(1.0, 40.0, 0.5) var release_speed: float = 12.0
 @export_range(0.1, 1.0, 0.01) var lock_break_distance: float = 0.6
 @export_range(10.0, 120.0, 1.0) var lock_break_angle: float = 65.0

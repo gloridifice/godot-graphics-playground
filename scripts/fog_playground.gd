@@ -22,6 +22,8 @@ func _ready() -> void:
 		_solver_label.offset_top = -70
 		_solver_label.offset_right = 900
 		_solver_label.offset_bottom = -40
+		_solver_label.scale = Vector2.ONE * (2.0 / 3.0)
+		_solver_label.pivot_offset = Vector2(0, 30)
 		_solver_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_solver_label.add_theme_color_override("font_shadow_color",Color.BLACK)
 		_solver_label.add_theme_constant_override("shadow_offset_x",2)

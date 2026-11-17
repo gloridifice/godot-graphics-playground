@@ -3,6 +3,12 @@ extends SceneTree
 var failures: int = 0
 
 func _initialize() -> void:
+	# This legacy controller has no scripted input port; its real mouse contract
+	# is interactive-only. Never silently steal the desktop in an automated run.
+	if "--interactive-input" not in OS.get_cmdline_user_args():
+		printerr("Interactive mouse test refused. Explicit consent required: -- --interactive-input")
+		quit(2)
+		return
 	_run.call_deferred()
 
 func _run() -> void:

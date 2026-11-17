@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://addons/motion/motion_character.gd" id="1_character"]
 [ext_resource type="Script" path="res://addons/motion/motion_camera.gd" id="2_camera"]
@@ -9,6 +9,8 @@
 [ext_resource type="Resource" path="res://addons/motion/foot_placement/guard.tres" id="7_foot_settings"]
 [ext_resource type="Script" path="res://addons/motion/motion_matching/matcher.gd" id="8_matching"]
 [ext_resource type="Resource" path="res://addons/motion/motion_matching/guard.res" id="9_database"]
+[ext_resource type="Script" path="res://addons/motion/climbing/climbing.gd" id="10_climbing"]
+[ext_resource type="Resource" path="res://addons/motion/climbing/guard.tres" id="11_climb_settings"]
 
 [sub_resource type="CapsuleShape3D" id="Capsule"]
 resource_local_to_scene = true
@@ -57,6 +59,10 @@ parameters/playback = SubResource("Playback")
 [node name="MotionMatching" type="Node" parent="."]
 script = ExtResource("8_matching")
 database = ExtResource("9_database")
+
+[node name="Climbing" type="Node" parent="."]
+script = ExtResource("10_climbing")
+settings = ExtResource("11_climb_settings")
 
 [node name="CameraRig" type="Node3D" parent="."]
 position = Vector3(0, 1.55, 0)

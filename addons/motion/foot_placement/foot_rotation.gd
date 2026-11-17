@@ -3,6 +3,6 @@ extends SkeletonModifier3D
 
 var driver: SkeletonModifier3D
 
-func _process_modification_with_delta(_delta: float) -> void:
+func _process_modification_with_delta(delta: float) -> void:
 	if is_instance_valid(driver):
-		driver.apply_foot_rotations()
+		driver.apply_foot_rotations(delta)

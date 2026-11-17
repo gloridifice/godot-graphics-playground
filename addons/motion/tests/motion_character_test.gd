@@ -1,21 +1,28 @@
 extends SceneTree
 ## Real package scene, native physics, accepted input, AnimationTree and skeleton poses.
-## Run in a focused graphical window (not headless).
+## Default: unfocusable window or headless; never captures the mouse.
+## -- --interactive-input explicitly opts into real F/Esc capture checks.
 
 var failures := 0
 var _player: MotionCharacter
 var _scene: Node3D
 var _events: Array[String] = []
+var _interactive := "--interactive-input" in OS.get_cmdline_user_args()
+var _controls := preload("res://addons/motion/tests/control_driver.gd").new()
 
 func _initialize() -> void:
+	if not _interactive:
+		root.unfocusable = true
+		root.add_child(_controls)
 	_run.call_deferred()
 
 func _run() -> void:
 	_scene = (load("res://addons/motion/demo.tscn") as PackedScene).instantiate()
 	root.add_child(_scene)
 	current_scene = _scene
-	root.grab_focus()
+	if _interactive: root.grab_focus()
 	_player = _scene.get_node("Player") as MotionCharacter
+	if not _interactive: _controls.bind(_player)
 	_player.jumped.connect(func(_feet: Vector3): _events.append("jump"))
 	_player.landed.connect(func(_feet: Vector3): _events.append("land"))
 	await _steps(30)
@@ -29,7 +36,7 @@ func _run() -> void:
 	Input.action_release("jump")
 	_check(_player.position.distance_to(start) < 0.02 and _events.is_empty(), "free cursor blocks movement and jumping")
 	await _key(KEY_F)
-	_check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and root.has_focus(), "physical F enters control in a focused window")
+	_check((Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and root.has_focus()) if _interactive else (Input.mouse_mode == Input.MOUSE_MODE_VISIBLE), "interactive capture or scripted control without mouse capture is active")
 	await _capture("idle")
 
 	Input.action_press("move_forward")
@@ -128,6 +135,7 @@ func _run() -> void:
 	var other := (load("res://addons/motion/motion_character.tscn") as PackedScene).instantiate() as MotionCharacter
 	other.position = Vector3(8, 0.03, 4)
 	_scene.add_child(other)
+	if not _interactive: _controls.bind(other)
 	await _steps(8)
 	await _key(KEY_F)
 	Input.action_press("crouch")
@@ -138,6 +146,31 @@ func _run() -> void:
 	var other_tree := other.get_node("AnimationTree") as AnimationTree
 	var other_state := (other_tree.get("parameters/playback") as AnimationNodeStateMachinePlayback).get_current_node()
 	_check(_player.is_crouching() and not other.is_crouching() and _state() == &"Crouch" and other_state == &"Grounded", "two instances retain different physical stances and animation states")
+	if not _interactive:
+		# Public scripted control is independent per actor, bounded, and edge-triggered.
+		_controls.set_enabled(false)
+		_player.set_external_input(Vector2.ZERO)
+		other.set_external_input(Vector2(3, 0))
+		var stationary := _player.position
+		var moving := other.position
+		await _steps(30)
+		_check(_player.position.distance_to(stationary) < 0.02 and other.position.x > moving.x + 0.5 and other.position.distance_to(moving) < 0.8, "external packets are actor-local and clamp oversized movement axes")
+		var jumps := [0]
+		other.jumped.connect(func(_feet: Vector3): jumps[0] += 1)
+		other.set_external_input(Vector2.ZERO, false, false, true)
+		await _steps(100)
+		_check(jumps[0] == 1 and other.is_on_floor(), "holding an external jump cannot repeat after landing")
+		# Even accidental F injection cannot capture while scripted input owns the cameras.
+		var capture := InputEventKey.new()
+		capture.physical_keycode = KEY_F
+		capture.pressed = true
+		Input.parse_input_event(capture)
+		var release_capture := capture.duplicate() as InputEventKey
+		release_capture.pressed = false
+		Input.parse_input_event(release_capture)
+		_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "external control ignores the camera capture hotkey")
+		_player.clear_external_input()
+		other.clear_external_input()
 	other.free()
 	root.propagate_notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
 	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "focus loss releases the mouse")
@@ -156,8 +189,14 @@ func _steps(count: int) -> void:
 	for i in count:
 		await physics_frame
 	await process_frame
+	if not _interactive: _check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "automation never captures the mouse")
 
 func _key(code: Key) -> void:
+	if not _interactive and code in [KEY_F, KEY_ESCAPE]:
+		if code == KEY_ESCAPE: _player.release_climb()
+		_controls.set_enabled(code == KEY_F)
+		await _steps(4)
+		return
 	var event := InputEventKey.new()
 	event.physical_keycode = code
 	event.pressed = true

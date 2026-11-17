@@ -47,9 +47,22 @@ class Foot:
 	var lock_world := Transform3D.IDENTITY
 	var lock_local := Transform3D.IDENTITY
 	var support: WeakRef
-	var release_from := Transform3D.IDENTITY
+	# Completed pre-IK target history, in world space (includes platform transport).
+	var previous_animated := Transform3D.IDENTITY
+	var resolved_velocity := Vector3.ZERO
+	var resolved_spin := Vector3.ZERO
+	var output_sampled := false
+	var release_position := Vector3.ZERO
+	var release_rotation := Vector3.ZERO
+	var release_velocity := Vector3.ZERO
+	var release_spin := Vector3.ZERO
 	var release_time := 0.0
 	var release_weight := 0.0
+	var leg_animated: Array[Quaternion] = []
+	var leg_previous: Array[Quaternion] = []
+	var leg_spin: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
+	var leg_release: Array[Vector3] = []
+	var leg_release_spin: Array[Vector3] = []
 	var lock_error := 0.0
 	var reach_limited := false
 	var reason := ""
@@ -133,6 +146,9 @@ func reset() -> void:
 		foot.height_offset = Vector2.ZERO
 		foot.weight_velocity = 0.0
 		foot.sampled = false
+		foot.output_sampled = false
+		foot.leg_previous.clear()
+		foot.leg_animated.clear()
 		foot.hit = {}
 		foot.reason = "reset"
 	_pelvis_drop = 0.0
@@ -166,17 +182,18 @@ func _process_modification_with_delta(delta: float) -> void:
 			foot.previous_support = null
 			foot.height_offset = Vector2.ZERO
 			foot.weight_velocity = 0.0
+			foot.output_sampled = false
 			foot.hit = {}
 			foot.goal = foot.animated
 			foot.reason = "airborne" if not _body.is_on_floor() else "disabled"
 		elif posture_changed:
-			_release(foot, "posture changed")
+			_release(foot, "posture changed", delta)
 			_update_foot(foot, delta)
 		else:
 			_update_foot(foot, delta)
 	_apply_pelvis(delta)
 	for foot in _feet:
-		_drive_leg(foot)
+		_drive_leg(foot, delta)
 		# Measure the resolved output in support space, not animation-local speed or
 		# last frame's world point (which would include platform translation/rotation).
 		if not foot.hit.is_empty():
@@ -192,7 +209,7 @@ func _update_foot(foot: Foot, delta: float) -> void:
 	var platform: Node3D = foot.support.get_ref() if foot.support != null else null
 	if foot.phase in [Phase.CONTACT, Phase.STANCE]:
 		if not is_instance_valid(platform) or not platform.is_inside_tree():
-			_release(foot, "support removed")
+			_release(foot, "support removed", delta)
 		elif foot.phase == Phase.STANCE:
 			foot.lock_world = platform.global_transform * foot.lock_local
 			sole = foot.lock_world * settings.sole_offset
@@ -218,15 +235,15 @@ func _update_foot(foot: Foot, delta: float) -> void:
 		var yaw_basis := foot.lock_world.basis if foot.phase == Phase.STANCE else foot.goal.basis
 		var yaw_error := yaw_basis.z.slide(Vector3.UP).angle_to(foot.animated.basis.z.slide(Vector3.UP))
 		if foot.hit.is_empty():
-			_release(foot, "ground lost")
+			_release(foot, "ground lost", delta)
 		elif platform != foot.hit.collider:
-			_release(foot, "support changed")
+			_release(foot, "support changed", delta)
 		elif foot.phase == Phase.STANCE and absf((sole - (foot.hit.position as Vector3)).dot(foot.hit.normal) - settings.sole_clearance) > 0.06:
-			_release(foot, "support height changed")
+			_release(foot, "support height changed", delta)
 		elif foot.contact < 0.45 or (foot.vertical_speed > 0.25 and foot.contact < 0.85):
-			_release(foot, "toe off")
+			_release(foot, "toe off", delta)
 		elif (foot.phase == Phase.STANCE and foot.lock_error > settings.lock_break_distance) or yaw_error > deg_to_rad(settings.lock_break_angle):
-			_release(foot, "lock limit")
+			_release(foot, "lock limit", delta)
 
 	if foot.phase in [Phase.SWING, Phase.APPROACH]:
 		# A ray hit is never sufficient: animation timing gates all correction/planting.
@@ -258,10 +275,15 @@ func _update_foot(foot: Foot, delta: float) -> void:
 				foot.reason = "touchdown settled"
 		Phase.RELEASE:
 			foot.release_time = minf(1.0, foot.release_time + settings.release_speed * delta)
-			var animated := foot.animated
-			animated.origin.y += _pelvis_drop
-			foot.goal = foot.release_from.interpolate_with(animated, foot.release_time)
-			foot.weight = foot.release_weight * (1.0 - foot.release_time)
+			if is_equal_approx(foot.release_time, 1.0): foot.release_time = 1.0
+			var u := foot.release_time
+			# Hermite residual: preserve the incoming correction velocity, then reach
+			# zero offset AND zero relative velocity against the moving animation.
+			var residual := (1.0 - u) * (1.0 - u) * (1.0 + 2.0 * u)
+			var tangent := u * (1.0 - u) * (1.0 - u) / settings.release_speed
+			var rotation := foot.release_rotation * residual + foot.release_spin * tangent
+			foot.goal = Transform3D(_rotation_basis(rotation) * foot.animated.basis, foot.animated.origin + foot.release_position * residual + foot.release_velocity * tangent)
+			foot.weight = foot.release_weight * residual
 			foot.height_offset = Vector2.ZERO
 			foot.weight_velocity = 0.0
 			if foot.release_time >= 1.0:
@@ -300,13 +322,30 @@ func _spring(state: Vector2, target: float, delta: float) -> Vector2:
 	var decay := exp(-omega * delta)
 	return Vector2(target + (offset + impulse * delta) * decay, (state.y - impulse * omega * delta) * decay)
 
-func _release(foot: Foot, reason: String) -> void:
+func _release(foot: Foot, reason: String, delta: float) -> void:
 	if foot.phase == Phase.RELEASE:
 		return
 	if foot.weight <= 0.0001 and foot.phase in [Phase.SWING, Phase.APPROACH]:
 		foot.phase = Phase.SWING
 		return
-	foot.release_from = foot.resolved if foot.weight > 0.0 else foot.animated
+	foot.release_position = foot.resolved.origin - foot.previous_animated.origin
+	foot.release_velocity = foot.resolved_velocity - (foot.animated.origin - foot.previous_animated.origin) / delta
+	var previous_basis := foot.resolved.basis.orthonormalized()
+	foot.release_rotation = _rotation_vector(previous_basis * foot.previous_animated.basis.orthonormalized().transposed())
+	# Predict the previous output one tick forward, rather than inheriting an
+	# animation velocity from an older tick (important at fast gait changes).
+	var predicted := _rotation_basis(foot.resolved_spin * delta) * previous_basis
+	foot.release_spin = (_rotation_vector(predicted * foot.animated.basis.orthonormalized().transposed()) - foot.release_rotation) / delta
+	foot.leg_release.clear()
+	foot.leg_release_spin.clear()
+	for index in 2:
+		var bone := foot.hip if index == 0 else foot.knee
+		var animated := _skeleton.get_bone_pose_rotation(bone)
+		var before := foot.leg_previous[index]
+		var error := _rotation_vector(Basis(before * foot.leg_animated[index].inverse()))
+		var predicted_leg := _rotation_basis(foot.leg_spin[index] * delta) * Basis(before)
+		foot.leg_release.append(error)
+		foot.leg_release_spin.append((_rotation_vector(predicted_leg * Basis(animated).transposed()) - error) / delta)
 	foot.release_weight = foot.weight
 	foot.release_time = 0.0
 	foot.phase = Phase.RELEASE
@@ -369,7 +408,7 @@ func _apply_pelvis(delta: float) -> void:
 	pose += _skeleton.global_basis.inverse() * (Vector3.UP * _pelvis_drop)
 	_skeleton.set_bone_pose_position(_pelvis, pose)
 
-func _drive_leg(foot: Foot) -> void:
+func _drive_leg(foot: Foot, delta: float) -> void:
 	var hip := _bone_world(foot.hip).origin
 	var knee := _bone_world(foot.knee).origin
 	var ankle := foot.animated.origin + Vector3.UP * _pelvis_drop
@@ -384,18 +423,48 @@ func _drive_leg(foot: Foot) -> void:
 	var target := foot.goal
 	if foot.phase in [Phase.SWING, Phase.APPROACH]:
 		target.origin.y += _pelvis_drop * (1.0 - foot.weight)
+	elif foot.phase == Phase.RELEASE:
+		# The incoming residual already contains the old pelvis compensation.
+		# Introduce the CURRENT drop with zero endpoint slopes, not last tick's drop.
+		target.origin.y += _pelvis_drop * smoothstep(0.0, 1.0, foot.release_time)
 	var displacement := target.origin - hip
 	var reach := foot.length * 0.998
 	if foot.weight > 0.0 and displacement.length() > reach:
 		target.origin = hip + displacement.normalized() * reach
 		foot.reach_limited = true
+	foot.resolved_velocity = (target.origin - foot.resolved.origin) / delta if foot.output_sampled else Vector3.ZERO
+	foot.resolved_spin = _rotation_vector(target.basis.orthonormalized() * foot.resolved.basis.orthonormalized().transposed()) / delta if foot.output_sampled else Vector3.ZERO
+	foot.previous_animated = foot.animated
+	foot.output_sampled = true
 	foot.resolved = target
 	foot.target.global_transform = target
-	# Height, orientation and horizontal braking have already been composed in the
-	# target. Applying the contact weight again would change the landing velocity.
-	foot.ik.influence = 1.0 if foot.phase == Phase.RELEASE or foot.weight > 0.0001 else 0.0
+	# Contact/Stance keep full IK. During Release, do not solve the nearly straight
+	# chain again: a smooth ankle path can still snap the knee at the reach limit.
+	# Decay the LAST DISPLAYED joint correction instead, preserving its velocity.
+	foot.ik.influence = 1.0 if foot.phase != Phase.RELEASE and foot.weight > 0.0001 else 0.0
+	foot.leg_animated = [_skeleton.get_bone_pose_rotation(foot.hip), _skeleton.get_bone_pose_rotation(foot.knee)]
+	if foot.phase == Phase.RELEASE:
+		var u := foot.release_time
+		# Quintic residuals have zero endpoint accelerations as well as zero final
+		# offset/velocity; this avoids a sharp late catch-up in the joint chain.
+		var residual := 1.0 - u * u * u * (10.0 + u * (-15.0 + 6.0 * u))
+		var tangent := u * (1.0 - u) * (1.0 - u) * (1.0 - u) * (1.0 + 3.0 * u) / settings.release_speed
+		for index in 2:
+			var correction := _rotation_basis(foot.leg_release[index] * residual + foot.leg_release_spin[index] * tangent).get_rotation_quaternion()
+			_skeleton.set_bone_pose_rotation(foot.hip if index == 0 else foot.knee, correction * foot.leg_animated[index])
 
-func apply_foot_rotations() -> void:
+func _rotation_basis(vector: Vector3) -> Basis:
+	var angle := vector.length()
+	return Basis(vector / angle, angle) if angle > 0.0 else Basis.IDENTITY
+
+func _rotation_vector(basis: Basis) -> Vector3:
+	var rotation := basis.get_rotation_quaternion()
+	if rotation.w < 0.0: rotation = -rotation
+	var axis := Vector3(rotation.x, rotation.y, rotation.z)
+	# atan2 stays accurate for small corrections where acos(w) rounds to zero.
+	return axis.normalized() * (2.0 * atan2(axis.length(), rotation.w))
+
+func apply_foot_rotations(delta: float) -> void:
 	for foot in _feet:
 		if not foot.sampled:
 			continue
@@ -403,6 +472,10 @@ func apply_foot_rotations() -> void:
 		var desired := foot.goal.basis.orthonormalized()
 		pose.basis = _skeleton.global_basis.inverse() * desired
 		_skeleton.set_bone_global_pose(foot.ankle, pose)
+		var current: Array[Quaternion] = [_skeleton.get_bone_pose_rotation(foot.hip), _skeleton.get_bone_pose_rotation(foot.knee)]
+		for index in 2:
+			foot.leg_spin[index] = _rotation_vector(Basis(current[index] * foot.leg_previous[index].inverse())) / delta if foot.leg_previous.size() == 2 and delta > 0.0 else Vector3.ZERO
+		foot.leg_previous = current
 
 func _bone_world(bone: int) -> Transform3D:
 	return _skeleton.global_transform * _skeleton.get_bone_global_pose(bone)

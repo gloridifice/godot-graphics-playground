@@ -8,16 +8,20 @@ var _player: MotionCharacter
 var _reference: Node3D
 var _reference_player: AnimationPlayer
 var _reference_skeleton: Skeleton3D
+var _controls := preload("res://addons/motion/tests/control_driver.gd").new()
 
 func _initialize() -> void:
+	root.unfocusable = true
+	root.add_child(_controls)
 	_run.call_deferred()
 
 func _run() -> void:
 	_scene = load("res://addons/motion/demo.tscn").instantiate()
 	root.add_child(_scene)
 	current_scene = _scene
-	root.grab_focus()
 	_player = _scene.get_node("Player")
+	_controls.bind(_player)
+	_controls.set_enabled(true)
 	_player.foot_placement.enabled = false # Public demo A/B switch; expose the unmodified native pose.
 	_reference = load("res://addons/motion/assets/guard.scn").instantiate()
 	_reference.visible = false
@@ -30,10 +34,22 @@ func _run() -> void:
 	_reference.add_child(_reference_player)
 	_reference_player.add_animation_library("", load("res://addons/motion/animations/mixamo.res"))
 	await _steps(35)
-	await _key(KEY_F)
-	_check(root.has_focus() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "focused graphical window accepts controller input")
+	# Real renderer budget, independent of the cloud's mesh/texture implementation.
+	# Per-sample AA primitives must not make UI draw calls grow with the library.
+	var diagram := _scene.get_node("Controls/MotionMatching") as Control
+	await RenderingServer.frame_post_draw
+	var visible_calls := Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+	diagram.hide()
+	await _steps(4)
+	await RenderingServer.frame_post_draw
+	var hidden_calls := Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+	diagram.show()
+	var diagram_calls := visible_calls - hidden_calls
+	_check(diagram_calls > 0 and diagram_calls <= 80, "live diagram adds at most 80 draw calls, not one AA primitive per sample (added %.0f)" % diagram_calls)
+	print("Motion diagram draw calls: ", diagram_calls)
+	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "scripted controller needs neither focus nor mouse capture")
 
-	for item: Array in [["move_forward", "Walk", Vector3.FORWARD, false], ["move_left", "StrafeLeft", Vector3.LEFT, false], ["move_right", "StrafeRight", Vector3.RIGHT, false], ["move_back", "WalkBack", Vector3.BACK, false], ["move_forward", "Run", Vector3.FORWARD, true], ["move_left", "StrafeLeft", Vector3.LEFT, true], ["move_right", "StrafeRight", Vector3.RIGHT, true], ["move_back", "WalkBack", Vector3.BACK, true]]:
+	for item: Array in [["move_forward", "Walk", Vector3.FORWARD, false], ["move_left", "StrafeLeft", Vector3.LEFT, false], ["move_right", "StrafeRight", Vector3.RIGHT, false], ["move_back", "WalkBack", Vector3.BACK, false], ["move_forward", "Run", Vector3.FORWARD, true], ["move_left", "RunLeft", Vector3.LEFT, true], ["move_right", "RunRight", Vector3.RIGHT, true], ["move_back", "RunBack", Vector3.BACK, true]]:
 		_player.position = Vector3(10, 0.03, 7)
 		_player.velocity = Vector3.ZERO
 		await _steps(20)
@@ -74,10 +90,10 @@ func _run() -> void:
 	var other := load("res://addons/motion/motion_character.tscn").instantiate() as MotionCharacter
 	other.position = Vector3(15.41, 0.03, 4)
 	_scene.add_child(other)
+	_controls.bind(other)
 	other.foot_placement.enabled = false
 	_player.position = Vector3(10, 0.03, 7)
 	await _steps(30)
-	await _key(KEY_F) # A newly instanced camera deliberately releases global mouse capture.
 	Input.action_press("move_left")
 	await _steps(70)
 	_check(other.get_real_velocity().length() < 0.03 and other.motion_matching.get_debug_state().clip == "Idle", "wall-projected trajectory chooses idle despite a held movement key")
@@ -111,16 +127,7 @@ func _steps(count: int) -> void:
 	for tick in count:
 		await physics_frame
 	await process_frame
-
-func _key(code: Key) -> void:
-	var event := InputEventKey.new()
-	event.physical_keycode = code
-	event.pressed = true
-	Input.parse_input_event(event)
-	await _steps(2)
-	event.pressed = false
-	Input.parse_input_event(event)
-	await _steps(2)
+	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "automation never captures the mouse")
 
 func _capture(name: String) -> void:
 	if "--screenshots" not in OS.get_cmdline_user_args(): return

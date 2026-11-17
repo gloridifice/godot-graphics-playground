@@ -11,3 +11,4 @@ source_file="res://addons/heightfield_fog/shaders/stable_fluid.glsl"
 dest_files=["res://.godot/imported/stable_fluid.glsl-253fa96285ec19ab6c1189f608d93bc5.res"]
 
 [params]
+

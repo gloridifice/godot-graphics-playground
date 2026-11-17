@@ -20,6 +20,8 @@ func _input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("release_mouse"):
+		# Latch before marking input handled; only an attached character blocks regrabs.
+		get_parent().release_climb()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_viewport().set_input_as_handled()
 	elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:

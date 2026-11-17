@@ -1,5 +1,5 @@
 extends SkeletonModifier3D
-## Ordered before foot placement: search sees animation, never IK-corrected feet.
+## Sample source pose, then decay-track before foot IK; never feed IK back into matching.
 var driver: Node
 func _process_modification_with_delta(delta: float) -> void:
 	if is_instance_valid(driver) and delta > 0.0:

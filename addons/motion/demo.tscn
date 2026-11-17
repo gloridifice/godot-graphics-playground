@@ -1,8 +1,10 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="PackedScene" path="res://addons/motion/motion_character.tscn" id="1_player"]
 [ext_resource type="PackedScene" path="res://addons/motion/demo/validation_course.tscn" id="2_course"]
 [ext_resource type="Script" path="res://addons/motion/demo/demo.gd" id="3_demo"]
+[ext_resource type="Script" path="res://addons/motion/ui/motion_matching_view.gd" id="4_matching_view"]
+[ext_resource type="PackedScene" path="res://addons/motion/demo/climbing_course.tscn" id="5_climbing"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
 sky_top_color = Color(0.24, 0.38, 0.55, 1)
@@ -43,15 +45,18 @@ size = Vector3(3, 0.5, 4)
 size = Vector3(3, 0.5, 4)
 
 [sub_resource type="StyleBoxFlat" id="Panel"]
-bg_color = Color(0.025, 0.04, 0.055, 0.84)
-content_margin_left = 12.0
-content_margin_top = 8.0
-content_margin_right = 12.0
-content_margin_bottom = 8.0
-corner_radius_top_left = 5
-corner_radius_top_right = 5
-corner_radius_bottom_left = 5
-corner_radius_bottom_right = 5
+bg_color = Color(0.035, 0.055, 0.078, 0.94)
+content_margin_left = 16.0
+content_margin_top = 14.0
+content_margin_right = 16.0
+content_margin_bottom = 14.0
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_left = 12
+corner_radius_bottom_right = 12
+
+[sub_resource type="Theme" id="ControlsTheme"]
+default_font_size = 14
 
 [node name="MotionDemo" type="Node3D"]
 script = ExtResource("3_demo")
@@ -86,6 +91,9 @@ shape = SubResource("RoofShape")
 
 [node name="ValidationCourse" parent="." instance=ExtResource("2_course")]
 
+[node name="ClimbingCourse" parent="." instance=ExtResource("5_climbing")]
+position = Vector3(-20, 0, 5)
+
 [node name="Player" parent="." instance=ExtResource("1_player")]
 position = Vector3(0, 0.05, 0)
 
@@ -96,20 +104,55 @@ offset_left = 20.0
 offset_top = 20.0
 offset_right = 1250.0
 offset_bottom = 90.0
+scale = Vector2(0.6666667, 0.6666667)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.9)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
-theme_override_font_sizes/font_size = 20
-text = "MOTION / Motion Matching + Foot Placement\nF: control / release | Esc: release | W: forward | A/D: strafe | S: back | Shift: run | Space: jump | Ctrl: crouch\nTab: next terrain checkpoint | R: reset checkpoint | F3: debug | F4: IK on/off | 1/2: left/right"
+theme_override_font_sizes/font_size = 18
+text = "MOTION LAB / Matching + procedural climb\nF: control / release  |  WASD: move  |  Space: jump / auto grab  |  ESC: detach (until grounded)\nTab / R: terrain / reset  |  F3: foot debug  |  F4: foot IK  |  F5: decay  |  1 / 2: legs"
 
 [node name="FootPanel" type="PanelContainer" parent="Controls"]
 offset_left = 20.0
-offset_top = 122.0
-offset_right = 430.0
+offset_top = 82.0
+offset_right = 350.0
+scale = Vector2(0.6666667, 0.6666667)
+theme = SubResource("ControlsTheme")
 theme_override_styles/panel = SubResource("Panel")
 
 [node name="Rows" type="VBoxContainer" parent="Controls/FootPanel"]
 layout_mode = 2
+
+[node name="TuningTitle" type="Label" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.69, 1)
+theme_override_font_sizes/font_size = 11
+text = "TUNING / POSE TRACKING"
+
+[node name="PoseSmoothing" type="CheckButton" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Motion pose decay (F5)"
+
+[node name="PoseHalfLifeLabel" type="Label" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+text = "Pose half-life: 0.060 s"
+
+[node name="PoseHalfLife" type="HSlider" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+focus_mode = 0
+max_value = 0.3
+step = 0.005
+value = 0.06
+
+[node name="Separator" type="HSeparator" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+
+[node name="FootTitle" type="Label" parent="Controls/FootPanel/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.69, 1)
+theme_override_font_sizes/font_size = 11
+text = "FOOT PLACEMENT / CONSTRAINTS"
 
 [node name="Enabled" type="CheckButton" parent="Controls/FootPanel/Rows"]
 layout_mode = 2
@@ -150,5 +193,20 @@ value = 0.25
 
 [node name="Status" type="Label" parent="Controls/FootPanel/Rows"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 14
 text = "Sampling feet..."
+
+[node name="MotionMatching" type="Control" parent="Controls"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -440.0
+offset_top = 82.0
+offset_right = -20.0
+offset_bottom = 632.0
+grow_horizontal = 0
+scale = Vector2(0.6666667, 0.6666667)
+pivot_offset = Vector2(420, 0)
+mouse_filter = 2
+script = ExtResource("4_matching_view")
+character_path = NodePath("../../Player")

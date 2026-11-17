@@ -1,7 +1,8 @@
 extends SceneTree
 ## Owning boundary: final rendered skeleton poses against real demo collision geometry.
 ## Protects planting/lock/release, modifier order, terrain orientation and lifecycle recovery.
-## Run graphically with focus. -- --screenshots saves terrain comparisons to TEMP.
+## Default window never takes focus or captures the mouse; headless also works.
+## -- --screenshots saves terrain comparisons to TEMP.
 
 const SOLE := Vector3(0.0, -0.17, 0.08) # Independently calibrated Guard ankle-to-sole point.
 var failures := 0
@@ -11,24 +12,27 @@ var _skeleton: Skeleton3D
 var _final: Array[Transform3D] = []
 var _history: Array[Dictionary] = []
 var _record := false
+var _controls := preload("res://addons/motion/tests/control_driver.gd").new()
 
 func _initialize() -> void:
+	root.unfocusable = true
+	root.add_child(_controls)
 	_run.call_deferred()
 
 func _run() -> void:
 	_scene = load("res://addons/motion/demo.tscn").instantiate() as Node3D
 	root.add_child(_scene)
 	current_scene = _scene
-	root.grab_focus()
 	_player = _scene.get_node("Player") as MotionCharacter
+	_controls.bind(_player)
+	_controls.set_enabled(true)
 	_skeleton = _player.get_node("Visual/Model/Skeleton3D") as Skeleton3D
 	_skeleton.skeleton_updated.connect(_sample_final_pose)
 	await _steps(40)
 	_check(_player.is_on_floor() and _final.size() == 2, "real physics and final skeleton update are running")
 	for foot in _final:
 		_check(absf((foot * SOLE).y - 0.02) < 0.025, "idle shoe rests on the floor, not at the ankle's height")
-	await _key(KEY_F)
-	_check(root.has_focus() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "focused graphical window accepts real controller input")
+	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "scripted controller accepts input without focus or mouse capture")
 
 	await _settle(Vector3(12, 0.04, 12))
 	for gait in ["walk", "run", "crouch", "tuned walk", "left", "right", "back"]:
@@ -238,6 +242,7 @@ func _steps(count: int) -> void:
 	for i in count:
 		await physics_frame
 	await process_frame
+	_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "automation never captures the mouse")
 
 func _key(code: Key) -> void:
 	var event := InputEventKey.new()
