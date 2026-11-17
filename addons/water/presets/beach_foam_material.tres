@@ -1,8 +1,0 @@
-[gd_resource type="Resource" script_class="WaterFoamMaterialSettings" load_steps=2 format=3]
-[ext_resource type="Script" path="res://addons/water/resources/foam_material_settings.gd" id="1"]
-[resource]
-script = ExtResource("1")
-tile_size = 6.0
-opacity_scale = 0.8
-coverage_reference = 1.0
-height_maximum = 0.025

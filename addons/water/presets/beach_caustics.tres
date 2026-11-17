@@ -1,9 +1,0 @@
-[gd_resource type="Resource" script_class="WaterCausticsSettings" load_steps=2 format=3]
-[ext_resource type="Script" path="res://addons/water/resources/caustics_settings.gd" id="1"]
-[resource]
-script = ExtResource("1")
-enabled = true
-ray_resolution = 512
-texture_resolution = 2048
-size = Vector2(64,64)
-filter_radius = 0.5
