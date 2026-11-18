@@ -22,9 +22,10 @@ func _run() -> void:
 			previous = boundary
 	for rate in [60, 120, 240]:
 		Engine.physics_ticks_per_second = rate
-		await _walking_release(rate)
+		for direction in [Vector2.UP, Vector2.DOWN, Vector2.LEFT]:
+			await _walking_release(rate, direction)
 	Engine.physics_ticks_per_second = 60
-	await _walking_release(60, true)
+	await _walking_release(60, Vector2.UP, true)
 	await _touchdown(60, false, true)
 	await _touchdown(60, false, false, true)
 	await _mixed_gait()
@@ -205,7 +206,7 @@ func _release(rate: int, moving: bool) -> Dictionary:
 	await process_frame
 	return boundary
 
-func _walking_release(rate: int, interrupt := false) -> void:
+func _walking_release(rate: int, direction: Vector2, interrupt := false) -> void:
 	# Full production controller + scripted input, not manual body/animation advancement.
 	# The held crouch fixture never straightens its knees: an ankle-only C1 test
 	# misses the IK reach singularity inside Release.
@@ -225,21 +226,22 @@ func _walking_release(rate: int, interrupt := false) -> void:
 	while ticks < rate * (8 if interrupt else 6):
 		await physics_frame
 		ticks = Engine.get_physics_frames() - began
-		character.set_external_input(Vector2(0, -1) if ticks >= rate / 2 else Vector2.ZERO)
+		character.set_external_input(direction if ticks >= rate / 2 else Vector2.ZERO)
 		await process_frame
 		var feet: Array = character.foot_placement.get_debug_state().feet
 		if interrupt and not interrupted and ticks > rate and feet.any(func(foot: Dictionary): return foot.phase == "Release"):
-			character.set_external_input(Vector2(0, -1), false, false, true)
+			character.set_external_input(direction, false, false, true)
 			interrupted = true
 		_check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "walking regression never captures the mouse")
 	var releases := [0, 0]
 	var peak_step := [0.0, 0.0]
 	var peak_raw := 0.0
+	var min_bend := INF
 	var airborne := 0
 	var landed := false
 	# Inspect EVERY skeleton tick, including physics catch-up ticks within one
 	# render frame; render sampling would turn two valid steps into a false pop.
-	for frame in range(rate + 1, history.size()):
+	for frame in range(ceili(rate * 0.5) + 1, history.size()):
 		var now: Dictionary = history[frame]
 		var previous: Dictionary = history[frame - 1]
 		if interrupt and not now.grounded:
@@ -250,7 +252,11 @@ func _walking_release(rate: int, interrupt := false) -> void:
 		elif interrupt and airborne > 0:
 			landed = true
 		for side in 2:
-			if now.grounded and (now.feet[side].phase == "Release" or previous.feet[side].phase == "Release"):
+			if now.grounded and now.feet[side].phase == "Release" and previous.feet[side].phase in ["Stance", "Release"]:
+				# Include the last planted frame and the first step: the lock can
+				# straighten the knee BEFORE the release velocity test even starts.
+				min_bend = minf(min_bend, minf(previous.bend[side], now.bend[side]))
+			if frame > rate and now.grounded and (now.feet[side].phase == "Release" or previous.feet[side].phase == "Release"):
 				for joint in 2:
 					var index := side * 2 + joint
 					peak_step[side] = maxf(peak_step[side], _quaternion_angle(now.final[index] * previous.final[index].inverse()))
@@ -266,14 +272,21 @@ func _walking_release(rate: int, interrupt := false) -> void:
 	var limit := deg_to_rad(7.0) * 60.0 / rate
 	_check(releases.min() >= 4 and peak_raw < limit, "native walking exercises repeated bilateral releases without an input pose jump")
 	_check(peak_step.max() < limit, "walking final thigh/knee stay below release angular-speed limit at %d Hz: %s deg/tick" % [rate, [rad_to_deg(peak_step[0]), rad_to_deg(peak_step[1])]])
-	print("Walking release ", rate, "Hz interrupted=", interrupt, " exits=", releases, " peak_deg=", [rad_to_deg(peak_step[0]), rad_to_deg(peak_step[1])])
+	_check(is_finite(min_bend) and min_bend >= 20.0, "%s: final knee retains bend through toe-off, including the first step (%.2f deg)" % [direction, min_bend])
+	print("Walking release ", direction, " ", rate, "Hz interrupted=", interrupt, " exits=", releases, " min_bend=", min_bend, " peak_deg=", [rad_to_deg(peak_step[0]), rad_to_deg(peak_step[1])])
 	stage.free()
 	await process_frame
 
 func _record_walking_frame(skeleton: Skeleton3D, character: MotionCharacter, raw: Array[Quaternion], history: Array[Dictionary]) -> void:
 	var final: Array[Quaternion] = []
 	_capture_leg_rotations(skeleton, final)
-	history.append({"final": final, "raw": raw.duplicate(), "feet": character.foot_placement.get_debug_state().feet, "grounded": character.is_on_floor()})
+	var bend := PackedFloat32Array()
+	for prefix in ["Left", "Right"]:
+		var hip := skeleton.get_bone_global_pose(skeleton.find_bone(prefix + "UpLeg")).origin
+		var knee := skeleton.get_bone_global_pose(skeleton.find_bone(prefix + "Leg")).origin
+		var ankle := skeleton.get_bone_global_pose(skeleton.find_bone(prefix + "Foot")).origin
+		bend.append(rad_to_deg((knee - hip).angle_to(ankle - knee)))
+	history.append({"final": final, "bend": bend, "raw": raw.duplicate(), "feet": character.foot_placement.get_debug_state().feet, "grounded": character.is_on_floor()})
 
 func _capture_leg_rotations(skeleton: Skeleton3D, output: Array[Quaternion]) -> void:
 	output.clear()

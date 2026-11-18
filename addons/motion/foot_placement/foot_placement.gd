@@ -4,6 +4,7 @@ extends SkeletonModifier3D
 ## Sibling order is this -> left IK -> right IK -> foot rotations. All run in one physics tick.
 
 enum Phase { SWING, APPROACH, CONTACT, STANCE, RELEASE }
+const REST_SPEED := 0.05 # m/s relative to the support
 const PHASE_NAMES := ["Swing", "Approach", "Contact", "Stance", "Release"]
 const CONTACT_TRANSITION := preload("res://addons/motion/foot_placement/contact_transition.gd")
 const ROTATION_MODIFIER := preload("res://addons/motion/foot_placement/foot_rotation.gd")
@@ -33,6 +34,8 @@ class Foot:
 	var transition := CONTACT_TRANSITION.new()
 	var previous_support: WeakRef
 	var previous_support_sole := Vector3.ZERO
+	var previous_support_root := Vector3.ZERO
+	var await_new_contact := false
 	var contact := 0.0
 	var distance_weight := 0.0
 	var animated := Transform3D.IDENTITY
@@ -143,6 +146,7 @@ func reset() -> void:
 		foot.ik.influence = 0.0
 		foot.support = null
 		foot.previous_support = null
+		foot.await_new_contact = false
 		foot.height_offset = Vector2.ZERO
 		foot.weight_velocity = 0.0
 		foot.sampled = false
@@ -180,6 +184,7 @@ func _process_modification_with_delta(delta: float) -> void:
 			foot.weight = 0.0
 			foot.support = null
 			foot.previous_support = null
+			foot.await_new_contact = false
 			foot.height_offset = Vector2.ZERO
 			foot.weight_velocity = 0.0
 			foot.output_sampled = false
@@ -199,7 +204,8 @@ func _process_modification_with_delta(delta: float) -> void:
 		if not foot.hit.is_empty():
 			var platform := foot.hit.collider as Node3D
 			foot.previous_support = weakref(platform)
-			foot.previous_support_sole = platform.global_transform.affine_inverse() * (foot.resolved * settings.sole_offset)
+			foot.previous_support_sole = platform.to_local(foot.resolved * settings.sole_offset)
+			foot.previous_support_root = platform.to_local(_body.global_position)
 		else:
 			foot.previous_support = null
 
@@ -230,6 +236,15 @@ func _update_foot(foot: Foot, delta: float) -> void:
 			foot.hit = {}
 			foot.distance_weight = 0.0
 
+	var same_support: bool = not foot.hit.is_empty() and foot.previous_support != null and foot.previous_support.get_ref() == foot.hit.collider
+	var travel := Vector3.ZERO
+	if same_support:
+		var ground := foot.hit.collider as Node3D
+		travel = (_body.global_position - ground.to_global(foot.previous_support_root)).slide(Vector3.UP) / delta
+	# A reach release consumes this plant, not the next one. Allow immediate
+	# reacquisition when the character stops on the same high contact plateau.
+	if foot.contact < 0.45 or not same_support or travel.length_squared() < REST_SPEED * REST_SPEED:
+		foot.await_new_contact = false
 	foot.lock_error = Vector2(foot.lock_world.origin.x - foot.animated.origin.x, foot.lock_world.origin.z - foot.animated.origin.z).length()
 	if foot.phase in [Phase.CONTACT, Phase.STANCE]:
 		var yaw_basis := foot.lock_world.basis if foot.phase == Phase.STANCE else foot.goal.basis
@@ -242,6 +257,9 @@ func _update_foot(foot: Foot, delta: float) -> void:
 			_release(foot, "support height changed", delta)
 		elif foot.contact < 0.45 or (foot.vertical_speed > 0.25 and foot.contact < 0.85):
 			_release(foot, "toe off", delta)
+		elif foot.phase == Phase.STANCE and _outgrowing_lock(foot, travel):
+			foot.await_new_contact = true
+			_release(foot, "leg reach", delta)
 		elif (foot.phase == Phase.STANCE and foot.lock_error > settings.lock_break_distance) or yaw_error > deg_to_rad(settings.lock_break_angle):
 			_release(foot, "lock limit", delta)
 
@@ -254,7 +272,7 @@ func _update_foot(foot: Foot, delta: float) -> void:
 		foot.height_offset = _spring(foot.height_offset, (ground_sole.y - animated_sole.y) * foot.contact * foot.distance_weight, delta)
 		var basis := foot.animated.basis.orthonormalized().slerp(surface.orthonormalized(), foot.weight)
 		foot.goal = _ankle_pose(Transform3D(basis, animated_sole + Vector3.UP * foot.height_offset.x))
-		if foot.phase == Phase.APPROACH and foot.contact >= 0.88 and foot.distance_weight > 0.05 and foot.vertical_speed < 0.2:
+		if not foot.await_new_contact and foot.phase == Phase.APPROACH and foot.contact >= 0.88 and foot.distance_weight > 0.05 and foot.vertical_speed < 0.2:
 			_start_contact(foot, surface, delta)
 		return
 
@@ -289,6 +307,22 @@ func _update_foot(foot: Foot, delta: float) -> void:
 			if foot.release_time >= 1.0:
 				foot.phase = Phase.SWING
 				foot.goal = foot.animated
+
+func _plant_reach(foot: Foot, hip: Vector3) -> float:
+	# Follow the source bend within a useful planted range (~26–40° for the Guard).
+	# Don't sink the pelvis to reproduce a deeply folded swing leg on uneven ground.
+	return clampf(hip.distance_to(foot.animated.origin), foot.length * 0.94, foot.length * 0.975)
+
+func _outgrowing_lock(foot: Foot, travel: Vector3) -> bool:
+	var hip := _bone_world(foot.hip).origin
+	var leg := hip - foot.lock_world.origin
+	if leg.dot(travel) <= 0.0 or travel.length_squared() < REST_SPEED * REST_SPEED:
+		return false # Incoming heel or stationary feet do not lose their anchors.
+	# Look half a release ahead. Keep the lock if lowering the pelvis can still
+	# maintain a bent knee; otherwise hand over before exhausting the leg length.
+	var predicted := leg + travel * (0.5 / settings.release_speed)
+	predicted.y -= clampf(predicted.y, 0.0, settings.max_pelvis_drop)
+	return predicted.length() > _plant_reach(foot, hip)
 
 func _start_contact(foot: Foot, surface: Basis, delta: float) -> void:
 	var platform := foot.hit.collider as Node3D
@@ -399,6 +433,8 @@ func _apply_pelvis(delta: float) -> void:
 		var offset := foot.goal.origin - hip
 		var horizontal_sq := offset.x * offset.x + offset.z * offset.z
 		var reach := foot.length * 0.985
+		if foot.phase in [Phase.CONTACT, Phase.STANCE]:
+			reach = _plant_reach(foot, hip)
 		# Solve the reachable vertical interval, rather than copying the feet's height difference.
 		if offset.y < 0.0 and horizontal_sq < reach * reach:
 			var drop := foot.goal.origin.y + sqrt(reach * reach - horizontal_sq) - hip.y
@@ -417,8 +453,10 @@ func _drive_leg(foot: Foot, delta: float) -> void:
 	if forward.length_squared() < 0.01:
 		forward = _skeleton.global_basis.x.slide(axis).normalized()
 	var bend := (knee - hip).slide(axis)
-	if bend.length() > 0.025 and bend.dot(forward) > 0.0:
-		forward = (bend.normalized() + forward * 0.3).normalized()
+	# Do not switch the pole from the side to straight ahead when a strafing
+	# knee crosses the forward half-plane. That flips the knee during Stance.
+	bend -= forward * minf(0.0, bend.dot(forward))
+	forward = (bend + forward * 0.025).normalized()
 	foot.pole.global_position = hip + forward * 0.8 + axis * 0.25
 	var target := foot.goal
 	if foot.phase in [Phase.SWING, Phase.APPROACH]:
