@@ -1,4 +1,4 @@
-[gd_resource type="AnimationNodeStateMachine" format=3]
+[gd_resource type="AnimationNodeStateMachine" format=3 uid="uid://l1clgpshx1pm"]
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_k4vg2"]
 animation = &"Climb"
