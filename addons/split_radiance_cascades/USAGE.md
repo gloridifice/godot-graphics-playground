@@ -8,7 +8,7 @@
 
 打开 [`scenes/sponza_src_preview.tscn`](../../scenes/sponza_src_preview.tscn)，切到 **3D**，无需按 F6。可用编辑器相机自由观察，或选中 `Camera3D` 并勾选视口里的 **Preview**，从中庭相机看背光布幔与柱子。选 `WorldEnvironment/SplitRadianceCascades`，在 Inspector 切换 **Preview In Editor** 对比原生照明；这不会关闭游戏里的 GI。要单看反弹光，在 **Debug → View** 选 **Indirect Only**。首次打开或重新启用时需构建静态快照。移动或调整 `Subject/GalleryLight` 时，间接光自动更新，不用点重建。相机和灯光停下后，视口会再绘制几十帧积累光照，随后恢复按需刷新，不必开启编辑器的持续更新。若更新 addon 脚本时场景已开着，且视口还在使用旧预览，把 **Preview In Editor** 关开一次即可，不必重启编辑器。
 
-**F6 运行时**：**1 / 2 / 3** 切换中庭、上层回廊、底层拱廊；**WASD** 飞行、**方向键** 转向、**Q/E** 降低／升高、**Shift** 加速，不捕获鼠标。G/B/V/C 与小房间相同。按 G 观察背光布帘和柱廊的亮度变化。场景使用 Intel Sponza 2022 与 Colorful Curtains；约 43 万个可见三角形及 2K JPG（质量 90）PBR 贴图用于画面和接收面，隐藏的同源代理仅用于射线，没有上游烘焙 GI。[模型与授权说明](../../assets/sponza/SOURCE.md)。
+**F6 运行时**：**1 / 2 / 3** 切换中庭、上层回廊、底层拱廊；**WASD** 飞行、**方向键** 转向、**Q/E** 降低／升高、**Shift** 加速，不捕获鼠标。G/B/V/C 与小房间相同。按 G 观察背光布帘和柱廊的亮度变化。场景使用 Intel Sponza 2022 与 Colorful Curtains；约 43 万个可见三角形及 2K JPG（质量 85）PBR 贴图用于画面和接收面，隐藏的同源代理仅用于射线，没有上游烘焙 GI。[模型与授权说明](../../assets/sponza/SOURCE.md)。
 
 两个场景运行时右上角默认显示毫秒表，**P** 隐藏面板并停止采样，再按恢复。`Viewport` 是 Godot 对该视口的渲染 CPU／GPU 时间，不是整个进程的 CPU 时间，也不是用 FPS 换算的帧间隔。`SRC total` 是同一个 SRC 回调内八段之和：Prepare（含绑定与参数更新）、Trace（含可选次级射线）、Gather、Parents（全部父级）、Deposit、Merge（全部级联）、Receiver（光栅化接收面底色）、Apply（探针插值与合成）。与旧版比较材质读取和合成开销时，用 **Receiver + Apply** 对照旧 Apply。CPU 列是渲染线程提交命令的时间，GPU 列来自设备时间戳，两列不能相加。
 

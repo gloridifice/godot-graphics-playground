@@ -111,7 +111,7 @@ func _build() -> void:
 	model.get_node("AnimationPlayer").free()
 	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
 		var material := mesh.get_active_material(0).duplicate() as StandardMaterial3D
-		material.albedo_texture = load(ROOT + "assets/mixamo/Guard Texture.png")
+		material.albedo_texture = load(ROOT + "assets/mixamo/Guard Texture.jpg")
 		material.roughness = 0.85
 		mesh.material_override = material
 	var packed := PackedScene.new()

@@ -4,7 +4,7 @@
 
 - Upstream: https://github.com/ramokz/phantom-camera
 - Version: v0.11.0.4, commit archive `d20277e` (official release zipball).
-- Installed directory: `addons/phantom_camera/` (unmodified upstream addon).
+- Installed directory: `addons/phantom_camera/`. The opaque 3D checker texture is stored as a JPEG; its example scenes use the new path.
 - License: MIT; full copyright and permission notice in `addons/phantom_camera/LICENSE`.
 - Uses Third Person Follow, its built-in SpringArm3D, and PhantomCameraHost.
 - No upstream examples are used by the playground. The vendored addon includes upstream assets and examples.
@@ -18,7 +18,7 @@
 - License: MIT; Jeh3no's notice is retained in `addons/JehenoThirdPersonController/LICENSE`. The upstream root `license.md` is retained as `addons/JehenoThirdPersonController/LICENSE.Gtibo` (Copyright 2024-present Tibo).
 - Original project and character model: Gtibo, https://github.com/gtibo/Godot-Plush-Character.
 - Prototype textures: PiCode, https://godotengine.org/asset-library/asset/2480. Demo audio: Kenney, https://kenney.nl/assets/category:Audio?sort=update. The bundled font has no separate license notice in upstream.
-- Local adaptations: rebased resource paths and the binary animation-library dependency; regenerated import metadata and duplicate promotional-image UIDs. GDScript, shaders, and original art/audio are unchanged; the unused `.depren` editor artifact is omitted.
+- Local adaptations: rebased resource paths and the binary animation-library dependency; regenerated import metadata and duplicate promotional-image UIDs. Opaque raster textures are stored as JPEGs (quality 85); textures with transparency, GDScript, shaders and audio are unchanged. The unused `.depren` editor artifact is omitted.
 - Imported as a scene asset, not an editor plugin. The upstream demo remains unchanged: it captures the mouse on startup and uses Ctrl. The project's `scenes/fog_playground.tscn` now uses the independent native `addons/motion/` controller and Mixamo model, retaining only the vendored map layout and ground texture. The forest's `scenes/player.tscn` remains separate.
 - `scenes/fog_playground.tscn` is based on the upstream test map, with a renamed root, no shared scene UID, and three local fog fields; it still references the vendored addon assets. `scripts/fog_playground.gd` bridges its CSG surfaces to the heightfield baker without changing upstream assets.
 - Usage and detailed provenance: `addons/JehenoThirdPersonController/SOURCE.md`; upstream documentation is retained in its `README.md`.

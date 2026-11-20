@@ -4,8 +4,8 @@
 [ext_resource type="PackedScene" uid="uid://mcb0ovo14n40" path="res://addons/JehenoThirdPersonController/PlayerCharacter/GodotPlush/godot_plush_model.glb" id="1_u1eck"]
 [ext_resource type="Shader" uid="uid://dhkgcxxo8ja7b" path="res://addons/JehenoThirdPersonController/PlayerCharacter/GodotPlush/Material/godot_plush.gdshader" id="2_snxew"]
 [ext_resource type="Material" uid="uid://buh6uaww5rtsq" path="res://addons/JehenoThirdPersonController/PlayerCharacter/GodotPlush/Material/godot_plush_mat.tres" id="3_ky0v5"]
-[ext_resource type="Texture2D" uid="uid://drijhg0g7ak1n" path="res://addons/JehenoThirdPersonController/PlayerCharacter/GodotPlush/Material/godot_plush_albedo.png" id="3_qrsv6"]
-[ext_resource type="Texture2D" uid="uid://dts2qgujqag2b" path="res://addons/JehenoThirdPersonController/PlayerCharacter/GodotPlush/Material/godot_plush_normal.png" id="4_2bjgw"]
+[ext_resource type="Texture2D" uid="uid://drijhg0g7ak1n" path="res://addons/JehenoThirdPersonController/PlayerCharacter/GodotPlush/Material/godot_plush_albedo.jpg" id="3_qrsv6"]
+[ext_resource type="Texture2D" uid="uid://dts2qgujqag2b" path="res://addons/JehenoThirdPersonController/PlayerCharacter/GodotPlush/Material/godot_plush_normal.jpg" id="4_2bjgw"]
 [ext_resource type="AnimationLibrary" uid="uid://b8nyuc00vuxii" path="res://addons/JehenoThirdPersonController/PlayerCharacter/GodotPlush/CustomAnimations/custom_animations.res" id="7_b8qk8"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_31vxd"]

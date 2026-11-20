@@ -15,7 +15,7 @@ from PIL import Image
 
 
 TEXTURE_LIMIT = 2048
-JPEG_QUALITY = 90
+JPEG_QUALITY = 85
 
 
 def prepare_textures(doc, source, work, cache):

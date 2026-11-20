@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://y2k8t8trhip1"]
 
-[ext_resource type="Texture2D" uid="uid://nu6btp05qtin" path="res://addons/JehenoThirdPersonController/Arts/godot-prototype-texture/PNG/grid_1024x1024/grid_black_1024x1024.png" id="1_1ow5t"]
+[ext_resource type="Texture2D" uid="uid://nu6btp05qtin" path="res://addons/JehenoThirdPersonController/Arts/godot-prototype-texture/JPG/grid_1024x1024/grid_black_1024x1024.jpg" id="1_1ow5t"]
 [ext_resource type="PackedScene" path="res://addons/motion/motion_character.tscn" id="2_kw53q"]
 [ext_resource type="Script" path="res://addons/motion/ui/motion_matching_view.gd" id="6_matching_view"]
 [ext_resource type="Script" uid="uid://puj1iwmxwbme" path="res://scripts/fog_playground.gd" id="3_fog_playground"]

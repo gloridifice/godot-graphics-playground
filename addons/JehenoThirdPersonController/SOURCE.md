@@ -21,6 +21,7 @@
 - 场景与文本资源中的旧 `res://Godot-State-Machine-Third-Person-Controller/addons/...` 引用改为 `res://addons/...`。
 - 通过 Godot 重新保存 `custom_animations.res`，将旧 `res://components/godot_plush/...` 动画依赖指向本目录。
 - Godot 重新生成 `.import` 中的源文件／缓存路径；为 `Arts/StoreImages/` 生成独立 UID，避免与上游 `Arts/Images/` 重复。
+- 不透明位图以质量 85 的 JPG 保存，原型贴图位于 `Arts/godot-prototype-texture/JPG/`。场景、材质与导入文件已更新路径，保留贴图 UID；有透明像素的图标仍为 PNG。
 - 新增本说明及 `LICENSE.Gtibo`，项目根目录的 `THIRD_PARTY.md` 同步登记来源。
 
 ## 使用

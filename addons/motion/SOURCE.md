@@ -23,9 +23,9 @@
 | `strafe_left.fbx` | `3DCharacter`：`Mixamo/Left Strafe Walking.fbx` |
 | `strafe_right.fbx` | `3DCharacter`：`Mixamo/Right Strafe Walking.fbx` |
 | `walk_back.fbx` | `3rdPersonController`：上述 `Walking Backwards.fbx` |
-| `Guard Texture.png` | `Guard Texture.png` |
+| `Guard Texture.jpg` | `Guard Texture.png` |
 
-FBX 只重命名、不修改字节。`character_0.png`、`character_1.png`、`character_2.png` 是 Godot 从角色 FBX 提取的内嵌贴图。所有原始资源都保留在本目录，不依赖下载目录或绝对文件路径。
+`character.fbx` 原先内嵌的法线、底色和高光贴图现分别引用同目录的 `character_0.jpg`、`character_1.jpg`、`character_2.jpg`，不再重复存储或在导入时生成 PNG。模型的网格、骨架和动画未改。三张贴图和独立的 `Guard Texture.jpg` 均保留原始 1024 × 1024 尺寸，以质量 85 编码。其余 FBX 只重命名，不修改字节。
 
 新增原文件 SHA-256：
 
@@ -39,7 +39,7 @@ FBX 只重命名、不修改字节。`character_0.png`、`character_1.png`、`ch
 
 ## 本地处理
 
-`tools/build_mixamo.gd` 使用 Godot 自带 FBX 导入器读取动画；用户提供的跑步及新增横移／后退按骨名及全局静止姿态映射旋转，保留守卫骨长、按髋高比例转换根轨迹，删除非骨骼轨道、清除髋部水平根运动、去除空中动作的额外竖直轨迹、按原根行程校准行走类播放时长；四个原地跑步片段无有效净根行程，根据明确的模型空间动作轴（前 +Z、左 +X、右 −X、后 −Z）投影支撑区鞋底反向速度，分别估计完整周期步幅；不把横向或后退动作按前向 z 轴误标为待机。库内统一按 6 m/s 校准，Run／RunLeft／RunRight／RunBack 的步幅约为 2.807／1.778／1.471／1.546 m，周期约为 0.468／0.296／0.245／0.258 s；运行默认 4.5 m/s，纯方向跑步 TimeScale 为 0.75，斜向仍由混合行程计算共同步频。配置循环并添加完整 `RESET`。另从原动画鞋底轨迹离线估计左右接触意图，生成可被 AnimationTree 混合的连续接触曲线；没有改写原始 FBX。模型移除多余动画播放器，保留骨架、蒙皮、材质和贴图。再从同一动画库离线采样脚部姿态／速度、平均根速度、直线未来轨迹及接触，生成 Motion Matching 检索资源。输出 Godot 原生 `.scn`／`.res`／`.tres`；运行时不联网、不转换模型、不使用 Blender。
+`tools/build_mixamo.gd` 使用 Godot 自带 FBX 导入器读取动画；用户提供的跑步及新增横移／后退按骨名及全局静止姿态映射旋转，保留守卫骨长、按髋高比例转换根轨迹，删除非骨骼轨道、清除髋部水平根运动、去除空中动作的额外竖直轨迹、按原根行程校准行走类播放时长；四个原地跑步片段无有效净根行程，根据明确的模型空间动作轴（前 +Z、左 +X、右 −X、后 −Z）投影支撑区鞋底反向速度，分别估计完整周期步幅；不把横向或后退动作按前向 z 轴误标为待机。库内统一按 6 m/s 校准，Run／RunLeft／RunRight／RunBack 的步幅约为 2.807／1.778／1.471／1.546 m，周期约为 0.468／0.296／0.245／0.258 s；运行默认 4.5 m/s，纯方向跑步 TimeScale 为 0.75，斜向仍由混合行程计算共同步频。配置循环并添加完整 `RESET`。另从原动画鞋底轨迹离线估计左右接触意图，生成可被 AnimationTree 混合的连续接触曲线；没有改写 FBX 动画数据。模型移除多余动画播放器，保留骨架、蒙皮、材质和贴图。再从同一动画库离线采样脚部姿态／速度、平均根速度、直线未来轨迹及接触，生成 Motion Matching 检索资源。输出 Godot 原生 `.scn`／`.res`／`.tres`；运行时不联网、不转换模型、不使用 Blender。
 
 ## 使用限制
 
