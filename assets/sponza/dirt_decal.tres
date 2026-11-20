@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://assets/sponza/dirt_decal.gdshader" id="1"]
+[ext_resource type="Texture2D" path="res://assets/sponza/textures/dirt_decal_basecolor.jpg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/sponza/textures/dirt_decal_opacity.jpg" id="3"]
+
+[resource]
+resource_name = "dirt_decal"
+shader = ExtResource("1")
+shader_parameter/base_color = ExtResource("2")
+shader_parameter/opacity_map = ExtResource("3")

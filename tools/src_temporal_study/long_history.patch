@@ -1,0 +1,9 @@
+--- a/addons/split_radiance_cascades/split_radiance_cascades.gd
++++ b/addons/split_radiance_cascades/split_radiance_cascades.gd
+@@ -65,5 +65,5 @@
+ @export_range(0.0, 0.99, 0.01) var history_retention := 0.94:
+ 	set(value):
+-		history_retention = clampf(value, 0.0, 0.99)
++		history_retention = clampf(value, 0.0, 0.995) # study-only: match A's stable retention, shader unchanged
+ 		_sync(false)
+ @export var multi_bounce := true:

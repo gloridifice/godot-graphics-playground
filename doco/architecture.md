@@ -66,6 +66,14 @@
 - 盒边和无承载孔洞均为零外部压力的开放周界；材质回溯逐格检查第一个交界，背景风入口记录参考坐标和入口承载高度，后续从资源公式持续重建，不错误钳到盒内 `h₀`。每格以初态／入口权重及入口加权承载高度区分来源，剩余为空域；初态参考点越出承载域时剔除其残余权重并归一化剩余来源，防止伪零接缝。其余外部厚度为零。单轨迹最多检查 128 格面，预算耗尽记录 `trace_limited`，不跳过未检查孔洞。各盒仍不交换状态。
 - GPU 保存不可变初始高度及每格 32 字节的材质／来源双缓冲，重建厚度直接绑定原 R32F Texture2DRD；另输出世界反向材质位移，Coverage／密度细节随局部气流卷动，不再双加全局风漂移。创建、计算和释放仍在全局 RenderingDevice 的渲染线程，无正常帧 CPU 场回读。开关／切换重置状态并把增益置为 `1`，暂停同时冻结增益恢复，预览起点生命周期与现有节点一致，不迁移动态状态。`swe_snapshot()` 在本模式返回独立的 scalar／height_gain／velocity 和投影诊断，不伪装成 SWE 动量；精确边界见 [Stable Fluids 合约](specs/heightfield-stable-fluid.md)。
 
+## Split Radiance Cascades 间接光
+
+- `addons/split_radiance_cascades/` 是独立 addon，不接入雾场或主场景。`SplitRadianceCascades` 作为 WorldEnvironment 子节点，在现有合成链后追加 Forward+ 的 POST_SKY 效果。可选 **Preview In Editor** 与运行时复用同一套快照和渲染代码；编辑器只覆盖当前编辑世界的 RenderingServer 合成链，不把临时 Compositor 写入场景。关闭预览、切换场景或移除节点时撤下效果、释放渲染资源；编辑器相机移动和调灯无需重建；修改静态几何、材质或源／代理路径后可点 **Rebuild GI Snapshot**。见[示例和接入说明](../addons/split_radiance_cascades/USAGE.md)。
+- [`scenes/sponza_src_preview.tscn`](../scenes/sponza_src_preview.tscn) 默认在 3D 编辑视口预览 GI，也可按 F6 运行。使用 [Intel Sponza 2022 建筑和布幔](../assets/sponza/SOURCE.md) 的 430,092 个可见三角形及 2K JPG（质量 90）PBR 贴图；同源隐藏代理只用 51,372 个三角形做世界空间求交，没有上游烘焙光照。相机可切三个视点或用键盘飞行。Sponza 与 addon 小房间共用右上角计时表：引擎报告视口渲染 CPU／GPU 毫秒，SRC 以每实例、每次采样会话的 RD 时间戳异步报告八段 CPU 提交与 GPU 执行时间，接收面绘制（Receiver）和最终合成（Apply）分列；P 隐藏停采，普通节点默认不插标记。`tests/sponza_src_preview_test.gd` 在运行时检查 GI 开关画面差、计时单位及停采／恢复。addon 的 `tests/editor_preview_test.tscn` 在真实 3D 编辑视口验证预览开关、点光源实时调色与关闭、静态几何手动重建和保存隔离。
+- 主线程为静态不透明三角网格与材质生成求交和接收面快照，静态输入修改后显式 `rebuild()`。默认使用有 65,536 面预算的软件 BVH；可选 `Prefer Hardware Trace` 在设备支持 RD 光追管线时，以网格局部空间的每个独立表面建一个 BLAS、实例变换建 TLAS，只替换 Trace 阶段（含次级和阴影射线）。建树与释放在渲染线程，不依赖内联 ray query；不支持时回退软件。同一代理下两后端共享采样、光照和级联算法；更换求交精度与更换后端是两件事。Directional／Omni 灯独立于快照：按节点进出树维护候选列表，检查有效灯光参数、世界变换和可见性。最多 8 盏；数据变化才更新 256 字节常驻缓冲并使主次探针历史失效，不重建 BVH、不重新上传接收面。GPU 从可见表面发射世界空间射线，按首次命中距离将光及此前区间的透射率写入四级稀疏方向探针；C3 接收超过 C2 边界的所有已知命中，真正未命中不发光。重叠 LOD 拆分样本权重；从远到近合并时，无局部样本或历史的方向保持无效，不被亮父级填充。稳定探针保留局部区间历史，次级命中写入独立粗缓存。
+- `receiver_pass.gd` 按材质以索引绘制可见网格，在独立 sRGB 附件中按原场景深度匹配接收面，写入底色 × (1 − 金属度)，含 UV1 底色和金属度贴图。默认可见网格也用于追踪；指定 `Trace Proxy Root` 时，只有射线改用对齐的代理，接收面和灯仍来自 `Source Root`。Apply 读取线性底色乘以探针照明，不再逐像素遍历 BVH。世界空间射线命中读共享的常量材质表；若命中面有普通 UV1 贴图，重建时在 GPU 上分层采样同一 UV 的线性底色与金属度，平均 `底色 × (1 − 金属度)` 写入表中，不逐射线查贴图、不回读。无贴图代理与自发光项保持原值。要求单目、关闭 MSAA 3D；不依赖屏幕内存在光源或硬件光追。
+- addon 内的 `tests/interval_bins_test.gd` 用受控射线验证未采样／遮挡／透射状态和重叠 LOD 的写入权重。`tests/render_test.gd` 读取无原生 GI 的最终画面，检查远处真实命中与未命中、近遮挡、稳定世界格、屏幕外次级反弹、接收面深度与底色贴图、点光源增删及父节点变换／可见性，以及卸载恢复。已在 Godot 4.7.2 / Forward+ / RTX 3070 的 D3D12、Vulkan 验证。`tools/profile_sponza_src.gd` 可测固定中庭，也可用 `software` / `hardware` / `visible` 对照固定拱廊的求交方式与几何精度，`no-proxy` 则直接测试原模型及其命中材质；720p、1080p 实测见 addon 的 [USAGE.md](../addons/split_radiance_cascades/USAGE.md)。
+
 ## 水体边界
 
 水体实现、Shader、纹理、示例和测试由独立的 Godot 4.7.2 C++ 插件仓库 [Oceanus](../../oceanus/README.md) 维护。本项目不再内置水体，也不依赖 Oceanus；水体当前架构与合约见 [Oceanus 文档](../../oceanus/doco/architecture.md)。

@@ -23,6 +23,12 @@
 - `scenes/fog_playground.tscn` is based on the upstream test map, with a renamed root, no shared scene UID, and three local fog fields; it still references the vendored addon assets. `scripts/fog_playground.gd` bridges its CSG surfaces to the heightfield baker without changing upstream assets.
 - Usage and detailed provenance: `addons/JehenoThirdPersonController/SOURCE.md`; upstream documentation is retained in its `README.md`.
 
+## Intel Sponza 2022 and Colorful Curtains
+
+- [Intel GPU Research Samples](https://www.intel.com/content/www/us/en/developer/topic-technology/graphics-research/samples.html), *Intel Sample Library* (2022), Frank Meinl and Anton Kaplanyan; addon crew and reference photographers credited in the [upstream notice](assets/sponza/credits_license.txt).
+- The two official archives include CC BY 4.0 and a separate personal/educational/limited-commercial-use notice. Consult the complete upstream terms before commercial use.
+- `assets/sponza/` contains optimized visible meshes, PBR textures and separate ray-tracing proxies derived from both packages. [Source downloads, attribution and conversion](assets/sponza/SOURCE.md).
+
 ## Mixamo character and animations
 
 - Installed directory: `addons/motion/assets/mixamo/`; derived native resources in `addons/motion/assets/guard.scn` and `addons/motion/animations/`.

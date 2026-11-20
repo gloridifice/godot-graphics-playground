@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://db3fdi8nsr4ks"
+path="res://.godot/imported/hardware_trace.glsl-5a3a74e2ebbaa4e13faaad1af3451ba1.res"
+
+[deps]
+
+source_file="res://addons/split_radiance_cascades/shaders/hardware_trace.glsl"
+dest_files=["res://.godot/imported/hardware_trace.glsl-5a3a74e2ebbaa4e13faaad1af3451ba1.res"]
+
+[params]
+

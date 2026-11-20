@@ -1,0 +1,127 @@
+[gd_scene format=3 uid="uid://bndrmer2dtou8"]
+
+[ext_resource type="PackedScene" uid="uid://cm3qk7avaxb45" path="res://assets/sponza/palace.gltf" id="1_atrium"]
+[ext_resource type="PackedScene" uid="uid://cm0q5amgqyi8e" path="res://assets/sponza/curtains.gltf" id="1_curtains"]
+[ext_resource type="PackedScene" uid="uid://dilmntx2x7bb0" path="res://assets/sponza/curtains_trace.glb" id="1_curtains_proxy"]
+[ext_resource type="PackedScene" uid="uid://50vxp8ennh4a" path="res://assets/sponza/palace_trace.glb" id="1_palace_proxy"]
+[ext_resource type="Script" uid="uid://bo2b0agefeshd" path="res://addons/split_radiance_cascades/split_radiance_cascades.gd" id="2_gi"]
+[ext_resource type="Script" uid="uid://bqflcdn8xmxsb" path="res://addons/split_radiance_cascades/preview_controls.gd" id="3_controls"]
+[ext_resource type="PackedScene" path="res://addons/split_radiance_cascades/timing_panel.tscn" id="4_timings"]
+[ext_resource type="Script" uid="uid://d2t0dty5s1jj1" path="res://scripts/camera/sponza_preview_camera.gd" id="5_camera"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
+sky_top_color = Color(0.34, 0.55, 0.76, 1)
+sky_horizon_color = Color(0.72, 0.81, 0.89, 1)
+ground_bottom_color = Color(0.15, 0.16, 0.18, 1)
+ground_horizon_color = Color(0.61, 0.66, 0.7, 1)
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMaterial")
+
+[sub_resource type="Environment" id="Daylight"]
+background_mode = 2
+sky = SubResource("Sky")
+ambient_light_source = 2
+ambient_light_color = Color(0.86, 0.9, 1, 1)
+ambient_light_sky_contribution = 0.0
+ambient_light_energy = 0.0
+reflected_light_source = 2
+tonemap_mode = 2
+ssao_enabled = true
+ssao_radius = 0.7
+ssao_intensity = 1.9
+
+[node name="SponzaSRCPreview" type="Node3D" unique_id=866636100]
+script = ExtResource("3_controls")
+navigation_hint = "1–3  viewpoints     WASD  fly     Q/E  down/up     Arrows  look     Shift  fast"
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=263152187]
+environment = SubResource("Daylight")
+
+[node name="SplitRadianceCascades" type="Node" parent="WorldEnvironment" unique_id=844893981]
+script = ExtResource("2_gi")
+preview_in_editor = true
+source_root = NodePath("../../Subject")
+prefer_hardware_trace = true
+strength = 3.0
+probe_spacing = 0.45
+first_interval = 0.65
+lod_distance = 7.0
+ray_stride = 6
+history_retention = 0.99
+
+[node name="Subject" type="Node3D" parent="." unique_id=1926261965]
+
+[node name="Sponza" parent="Subject" unique_id=389313001 instance=ExtResource("1_atrium")]
+
+[node name="Curtains" parent="Subject" unique_id=1804641453 instance=ExtResource("1_curtains")]
+
+[node name="TraceProxy" type="Node3D" parent="Subject" unique_id=58575097]
+visible = false
+
+[node name="Palace" parent="Subject/TraceProxy" unique_id=813014293 instance=ExtResource("1_palace_proxy")]
+
+[node name="Curtains" parent="Subject/TraceProxy" unique_id=1286934279 instance=ExtResource("1_curtains_proxy")]
+
+[node name="Sun" type="DirectionalLight3D" parent="Subject" unique_id=984055378]
+transform = Transform3D(0.40848747, 0.87950116, -0.24416333, 0, 0.26749888, 0.9635582, 0.91276395, -0.39360145, 0.10926994, 0, 0, 0)
+visible = false
+light_color = Color(1, 0.95, 0.86, 1)
+light_energy = 3.0
+shadow_enabled = true
+directional_shadow_max_distance = 60.0
+
+[node name="GalleryLight" type="OmniLight3D" parent="Subject" unique_id=576286022]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.5670166, 1.352787, -0.08239412)
+light_color = Color(1, 0.82, 0.65, 1)
+light_energy = 4.5
+light_indirect_energy = 8.0
+shadow_enabled = true
+omni_range = 9.0
+
+[node name="GalleryLight" type="OmniLight3D" parent="Subject/GalleryLight" unique_id=1149814776]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.943336, 1.352787, -0.08239412)
+light_color = Color(1, 0.82, 0.65, 1)
+light_energy = 4.5
+light_indirect_energy = 8.0
+shadow_enabled = true
+omni_range = 9.0
+
+[node name="GalleryLight" type="OmniLight3D" parent="Subject/GalleryLight/GalleryLight" unique_id=2001420515]
+transform = Transform3D(1, 0, 0, 0, 0.9945606, 0.10415997, 0, -0.10415997, 0.9945606, -6.2105856, 3.1679525, -0.5089179)
+light_color = Color(1, 0.82, 0.65, 1)
+light_energy = 4.5
+light_indirect_energy = 8.0
+shadow_enabled = true
+omni_range = 9.0
+
+[node name="Views" type="Node3D" parent="." unique_id=151629308]
+
+[node name="Nave" type="Marker3D" parent="Views" unique_id=676902827]
+transform = Transform3D(-0.18512951, -0.1913811, -0.96389854, 0, 0.98085344, -0.19474748, 0.9827141, -0.036053505, -0.18158491, -8.81, 1.59, -0.86)
+
+[node name="Gallery" type="Marker3D" parent="Views" unique_id=657636502]
+transform = Transform3D(0.12546475, 0.022816245, 0.9918357, 0, 0.99973553, -0.022997972, -0.9920981, 0.0028854348, 0.12543157, 10.53, 7.35, 1.53)
+
+[node name="Arcade" type="Marker3D" parent="Views" unique_id=844208708]
+transform = Transform3D(-0.11892162, -0.09912497, -0.9879433, 0, 0.9950042, -0.09983342, 0.99290365, -0.011872352, -0.11832751, -9.3, 1.65, -4.75)
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1428314611 node_paths=PackedStringArray("viewpoints")]
+transform = Transform3D(-0.18512951, -0.1913811, -0.96389854, 0, 0.98085344, -0.19474748, 0.9827141, -0.036053505, -0.18158491, -8.81, 1.59, -0.86)
+current = true
+fov = 59.0
+far = 90.0
+script = ExtResource("5_camera")
+viewpoints = [NodePath("../Views/Nave"), NodePath("../Views/Gallery"), NodePath("../Views/Arcade")]
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=955797938]
+
+[node name="Caption" type="Label" parent="HUD" unique_id=586750700]
+offset_left = 16.0
+offset_top = 12.0
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 16
+
+[node name="RenderTimings" parent="HUD" unique_id=1055655963 node_paths=PackedStringArray("cascades") instance=ExtResource("4_timings")]
+anchors_preset = 1
+cascades = NodePath("../../WorldEnvironment/SplitRadianceCascades")

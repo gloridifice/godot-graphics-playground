@@ -1,0 +1,69 @@
+--- a/addons/split_radiance_cascades/cascade_effect.gd
++++ b/addons/split_radiance_cascades/cascade_effect.gd
+@@ -13,6 +13,8 @@
+ 
+ const Profiler := preload("stage_profiler.gd")
+ const ReceiverPass := preload("receiver_pass.gd")
++const ScreenFilter := preload("screen_filter.gd")
++var _screen: ScreenFilter
+ const HardwareTrace := preload("hardware_trace.gd")
+ var _rt: HardwareTrace
+ enum Stage { PREPARE, TRACE, GATHER, PARENTS, DEPOSIT, MERGE, RECEIVER, APPLY }
+@@ -207,7 +209,12 @@
+ 	if not albedo.is_valid():
+ 		_failure("receiver framebuffer/pipeline")
+ 		return
+-	var bindings := _uniform_set(depth, normal, color, albedo)
++	var dest := color
++	if _options.z <= 1:
++		if not _screen: _screen = ScreenFilter.new()
++		dest = _screen.resize(_rd, size, buffers.get_render_target())
++		if not dest.is_valid(): _failure("study filter targets"); return
++	var bindings := _uniform_set(depth, normal, dest, albedo)
+ 	var rt_bindings := _uniform_set(depth, normal, color, albedo, true) if _rt else RID()
+ 	if not bindings.is_valid() or (_rt and not rt_bindings.is_valid()):
+ 		_failure("viewport uniform set")
+@@ -249,6 +256,8 @@
+ 		return
+ 	if timed: _profiler.end_stage(_rd, Stage.RECEIVER)
+ 	_dispatch(bindings, Stage.APPLY, 0, (size + Vector2i(7,7)) / 8)
++	if _options.z <= 1 and not _screen.run(_params, _sampler, depth, normal, albedo, color, projection * Projection(xf.affine_inverse()), xf.origin, _frame):
++		_failure("study filter uniforms"); return
+ 	if timed: _profiler.end_stage(_rd, Stage.APPLY)
+ 	if editor_redraw.is_valid():
+ 		_settle_editor_view(buffers.get_render_target(), [xf, size, projection.x.x, projection.y.y])
+@@ -313,6 +322,9 @@
+ 	if _rt:
+ 		_rt.close()
+ 		_rt = null
++	if _screen:
++		_screen.close()
++		_screen = null
+ 	_receiver.close()
+ 	for buffer in _scene_buffers:
+ 		_free(buffer)
+--- a/addons/split_radiance_cascades/shaders/cascades.glsl
++++ b/addons/split_radiance_cascades/shaders/cascades.glsl
+@@ -18,15 +18,16 @@
+ void apply_pixel(ivec2 pixel) {
+ 	if (any(greaterThanEqual(pixel,p.grid.xy))) return;
+ 	vec3 pos, n;
++	int mode = p.options.y;
++	if (mode <= 1) { // destination is a separate RGBA16F raw irradiance image
++		bool valid = surface(pixel,pos,n) && texelFetch(receiver_tex,pixel,0).a > 0.;
++		imageStore(color_tex,pixel,valid ? vec4(irradiance_over_pi(pos,n,false),1) : vec4(0));
++		return;
++	}
+ 	if (!surface(pixel,pos,n)) return;
+ 	vec4 original = imageLoad(color_tex,pixel);
+ 	vec3 color = vec3(0);
+-	int mode = p.options.y;
+-	if (mode <= 1) {
+-		vec4 receiver = texelFetch(receiver_tex,pixel,0);
+-		if (receiver.a > 0.0) color = irradiance_over_pi(pos,n,false)*receiver.rgb*p.display.x;
+-		if (mode == 0) color += original.rgb;
+-	} else {
++	{
+ 		float lod = lod_at(pos);
+ 		int c = p.options.z;
+ 		uint id = lookup(c, key_at(pos,int(lod),c));

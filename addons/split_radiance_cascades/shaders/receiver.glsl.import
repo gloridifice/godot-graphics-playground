@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dnn321hnuq4f1"
+path="res://.godot/imported/receiver.glsl-0bf477fa1ad2aa9547218e755607fb61.res"
+
+[deps]
+
+source_file="res://addons/split_radiance_cascades/shaders/receiver.glsl"
+dest_files=["res://.godot/imported/receiver.glsl-0bf477fa1ad2aa9547218e755607fb61.res"]
+
+[params]
+

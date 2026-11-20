@@ -1,0 +1,42 @@
+--- a/addons/split_radiance_cascades/shaders/merge.inc
++++ b/addons/split_radiance_cascades/shaders/merge.inc
+@@ -21,13 +21,13 @@
+ }
+ shared uint neighbors[8];
+ shared float spatial[8];
+-shared float old_decay;
++shared uint history_age;
+ void merge_probe(int c) {
+ 	uint id = active_ids[p.slot_base[c] + gl_WorkGroupID.x];
+ 	uint lane = gl_LocalInvocationIndex;
+ 	if (lane == 0u) {
+ 		uint previous = slots[id].z;
+-		old_decay = previous == 0u ? 0.0 : pow(p.tuning.w,float(uint(p.grid.w)-previous));
++		history_age = previous == 0u ? 0u : uint(p.grid.w)-previous;
+ 		slots[id].z = uint(p.grid.w);
+ 	}
+ 	if (c < 3 && lane < 8u) {
+@@ -47,7 +47,22 @@
+ 		vec4 sum = vec4(bins[b].sum) / float(LOD_ONE);
+ 		// Accumulate only the LOCAL interval. Re-feeding the merged result here
+ 		// would count the same far light once per frame even without a bounce.
+-		float old_count = old_decay > 0.0 ? bins[b].weight*old_decay : 0.0;
++		float old_count = 0.0;
++		vec2 drift = vec2(0); // signed / absolute residual; stale slots have no moments
++		if (history_age != 0u && bins[b].weight > 0.0 && p.tuning.w > 0.0) {
++			float old = bins[b].weight;
++			float stable = mix(p.tuning.w,min(0.9975,1.0-(1.0-p.tuning.w)*0.25),smoothstep(2.0,24.0,old));
++			drift = bins[b].pad;
++			if (count > 0.0) {
++				vec4 k = vec4(.2126,.7152,.0722,.125); // also sense changed transmission
++				float delta = dot(sum/count-bins[b].interval,k);
++				drift = mix(drift, vec2(delta,abs(delta)), 0.125);
++			}
++			float change = smoothstep(.55,.9,abs(drift.x)/(drift.y+.015));
++			float h = mix(stable,min(p.tuning.w,.85),change);
++			old_count = old*pow(h,float(history_age));
++		}
++		bins[b].pad = drift;
+ 		if (old_count > 0.0) sum += bins[b].interval * old_count;
+ 		count += old_count;
+ 		if (count < 1e-5) count = 0.0;

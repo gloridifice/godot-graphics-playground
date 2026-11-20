@@ -1,0 +1,7 @@
+case,flicker,brightness,edge,relight,gpu1080,passes
+ctrl98,False,True,True,True,True,False
+adaptive,True,True,True,True,True,True
+sequence,False,True,True,True,True,False
+screen,True,True,True,False,False,False
+ctrl99,False,True,True,True,True,False
+fixed995,True,True,True,True,True,True

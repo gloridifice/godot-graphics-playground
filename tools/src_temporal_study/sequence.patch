@@ -1,0 +1,47 @@
+--- a/addons/split_radiance_cascades/shaders/trace.inc
++++ b/addons/split_radiance_cascades/shaders/trace.inc
+@@ -51,11 +51,18 @@
+ int hit_material(int key) { return int(triangles[key*3].w); }
+ vec3 hit_normal(int key) { return normalize(cross(triangles[key*3+1].xyz, triangles[key*3+2].xyz)); }
+ #endif
+-vec3 hemisphere(vec3 n, uint seed) {
+-	// Per-tile scramble of the R2 sequence. Uniform solid angle; cosine is
+-	// applied only at irradiance lookup, not a second time while depositing.
++vec3 hemisphere(vec3 pos, vec3 n, uint seed, bool secondary) {
++	// .w is reset when the probe slot is reclaimed. TRACE precedes GATHER:
++	// an origin whose probe does not exist yet uses the original tile sequence.
++	int tag = int(lod_at(pos)) + (secondary ? 4 : 0);
++	uint key = key_at(pos,tag,0), id = lookup(0,key);
++	uint ordinal = uint(p.grid.w);
++	if (id != NONE) {
++		ordinal = atomicAdd(slots[id].w,1u);
++		seed = hash32(key);
++	}
+ 	vec2 scramble = vec2(hash32(seed), hash32(seed^9137u)) * (1.0/4294967296.0);
+-	vec2 u = fract(scramble + float(p.grid.w % 16384)*vec2(0.754877666,0.569840296));
++	vec2 u = fract(scramble + float(ordinal % 16384u)*vec2(0.754877666,0.569840296));
+ 	vec3 t = normalize(cross(abs(n.y) < 0.9 ? vec3(0,1,0) : vec3(1,0,0), n));
+ 	float r = sqrt(max(0.0,1.0-u.y*u.y)), phi = 2.0*PI*u.x;
+ 	return t*(cos(phi)*r) + cross(n,t)*(sin(phi)*r) + n*u.y;
+@@ -115,8 +122,8 @@
+ 	vec3 pos, n;
+ 	if (any(greaterThanEqual(pixel,p.grid.xy)) || !surface(pixel,pos,n)) return;
+ 	vec3 hit_pos, hit_n, unused_pos, unused_n;
+-	Ray primary = trace_ray(pos,n,hemisphere(n,seed),hit_pos,hit_n);
++	Ray primary = trace_ray(pos,n,hemisphere(pos,n,seed,false),hit_pos,hit_n);
+ 	rays[index] = primary;
+ 	if (p.options.x != 0 && primary.origin_t.w < MISS)
+-		rays[index+tile_count] = trace_ray(hit_pos,hit_n,hemisphere(hit_n,seed^0x527ba1u),unused_pos,unused_n);
++		rays[index+tile_count] = trace_ray(hit_pos,hit_n,hemisphere(hit_pos,hit_n,seed^0x527ba1u,true),unused_pos,unused_n);
+ }
+--- a/addons/split_radiance_cascades/shaders/trace_bindings.inc
++++ b/addons/split_radiance_cascades/shaders/trace_bindings.inc
+@@ -12,7 +12,7 @@
+ #else
+ #define PROBE_ACCESS
+ #endif
+-layout(set=0,binding=1,std430) PROBE_ACCESS buffer Table { uvec4 slots[]; };
++layout(set=0,binding=1,std430) buffer Table { uvec4 slots[]; };
+ struct Bin { uvec4 sum; uint mass; float weight; vec2 pad; vec4 interval, merged; };
+ layout(set=0,binding=4,std430) PROBE_ACCESS buffer Bins { Bin bins[]; };
+ struct Ray { vec4 origin_t, rgb_bin; };

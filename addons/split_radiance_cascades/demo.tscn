@@ -1,0 +1,115 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/split_radiance_cascades/split_radiance_cascades.gd" id="1_gi"]
+[ext_resource type="Script" path="res://addons/split_radiance_cascades/demo.gd" id="2_demo"]
+
+[ext_resource type="PackedScene" path="res://addons/split_radiance_cascades/timing_panel.tscn" id="3_panel"]
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 1
+background_color = Color(0.045, 0.049, 0.058, 1)
+ambient_light_source = 1
+ambient_light_energy = 0.0
+reflected_light_source = 1
+tonemap_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="Plaster"]
+albedo_color = Color(0.84, 0.82, 0.78, 1)
+roughness = 1.0
+[sub_resource type="StandardMaterial3D" id="Ochre"]
+albedo_color = Color(0.92, 0.34, 0.13, 1)
+roughness = 1.0
+[sub_resource type="StandardMaterial3D" id="Teal"]
+albedo_color = Color(0.12, 0.64, 0.61, 1)
+roughness = 1.0
+[sub_resource type="StandardMaterial3D" id="Lamp"]
+albedo_color = Color(0.8, 0.76, 0.7, 1)
+emission_enabled = true
+emission = Color(1, 0.94, 0.82, 1)
+emission_energy_multiplier = 6.0
+
+[sub_resource type="BoxMesh" id="Floor"]
+material = SubResource("Plaster")
+size = Vector3(8, 0.2, 6)
+[sub_resource type="BoxMesh" id="Back"]
+material = SubResource("Plaster")
+size = Vector3(8, 4.2, 0.2)
+[sub_resource type="BoxMesh" id="Side"]
+size = Vector3(0.2, 4.2, 6)
+[sub_resource type="BoxMesh" id="Panel"]
+material = SubResource("Lamp")
+size = Vector3(3.2, 0.08, 2.2)
+[sub_resource type="BoxMesh" id="Tall"]
+material = SubResource("Plaster")
+size = Vector3(1.5, 2.55, 1.4)
+[sub_resource type="BoxMesh" id="Short"]
+material = SubResource("Plaster")
+size = Vector3(2, 0.95, 1.45)
+[sub_resource type="SphereMesh" id="Ball"]
+material = SubResource("Plaster")
+radius = 0.5
+height = 1.0
+radial_segments = 20
+rings = 10
+
+[node name="SplitRadianceRoom" type="Node3D"]
+script = ExtResource("2_demo")
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env")
+[node name="SplitRadianceCascades" type="Node" parent="WorldEnvironment"]
+script = ExtResource("1_gi")
+preview_in_editor = true
+source_root = NodePath("../../Room")
+probe_spacing = 0.28
+lod_distance = 10.0
+[node name="Room" type="Node3D" parent="."]
+[node name="Floor" type="MeshInstance3D" parent="Room"]
+position = Vector3(0, -0.1, 0)
+mesh = SubResource("Floor")
+[node name="Ceiling" type="MeshInstance3D" parent="Room"]
+position = Vector3(0, 4.1, 0)
+mesh = SubResource("Floor")
+[node name="Back" type="MeshInstance3D" parent="Room"]
+position = Vector3(0, 2, -3.1)
+mesh = SubResource("Back")
+[node name="Ochre" type="MeshInstance3D" parent="Room"]
+position = Vector3(-3.95, 2, 0)
+mesh = SubResource("Side")
+material_override = SubResource("Ochre")
+[node name="Teal" type="MeshInstance3D" parent="Room"]
+position = Vector3(3.95, 2, 0)
+mesh = SubResource("Side")
+material_override = SubResource("Teal")
+[node name="LightPanel" type="MeshInstance3D" parent="Room"]
+position = Vector3(-0.45, 3.94, -0.4)
+mesh = SubResource("Panel")
+[node name="TallBlock" type="MeshInstance3D" parent="Room"]
+position = Vector3(-1.5, 1.275, -0.8)
+rotation = Vector3(0, 0.32, 0)
+mesh = SubResource("Tall")
+[node name="Plinth" type="MeshInstance3D" parent="Room"]
+position = Vector3(1.25, 0.475, 0.08)
+rotation = Vector3(0, -0.25, 0)
+mesh = SubResource("Short")
+[node name="Sphere" type="MeshInstance3D" parent="Room"]
+position = Vector3(1.25, 1.45, 0.08)
+mesh = SubResource("Ball")
+[node name="Fill" type="OmniLight3D" parent="Room"]
+position = Vector3(-1.2, 3.65, 0.3)
+light_color = Color(1, 0.96, 0.89, 1)
+light_energy = 1.35
+omni_range = 9.0
+shadow_enabled = true
+[node name="Camera3D" type="Camera3D" parent="."]
+position = Vector3(0, 2.05, 8.3)
+fov = 40.0
+current = true
+[node name="HUD" type="CanvasLayer" parent="."]
+[node name="Caption" type="Label" parent="HUD"]
+offset_left = 18.0
+offset_top = 14.0
+mouse_filter = 2
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 17
+[node name="RenderTimings" parent="HUD" node_paths=PackedStringArray("cascades") instance=ExtResource("3_panel")]
+cascades = NodePath("../../WorldEnvironment/SplitRadianceCascades")

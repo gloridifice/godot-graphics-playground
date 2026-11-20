@@ -1,0 +1,17 @@
+{
+  "dark_pixels": 34648,
+  "relight_pixels": 7710,
+  "edge_pixel_counts": [
+    8407,
+    8095,
+    7649,
+    7343,
+    7035,
+    6727,
+    6367,
+    5876
+  ],
+  "native_max_abs_d1": 0.0,
+  "native_motion_alignment_max": 0.0,
+  "stride2_dark_mean": 20.46745491027832
+}

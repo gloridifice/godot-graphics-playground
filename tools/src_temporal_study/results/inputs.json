@@ -1,0 +1,103 @@
+{
+  "scene_sha256": "0fe6d36c61efa4dd7aa043f0eb4dddc80647af2d30b0e8166f5f09d541e8f986",
+  "original_addon": {
+    "addons/split_radiance_cascades/cascade_effect.gd": "3c69ae268d547d092bffa6570571619d5cee5a71cd49dcae6dcdfaabca08c9a2",
+    "addons/split_radiance_cascades/demo.gd": "bb2e66536cc7da6ba769930aa2d524197afd1f8ae87bb43067e099e3ef5a8890",
+    "addons/split_radiance_cascades/hardware_trace.gd": "40f50c09b99b17334d615c23e2b4834383e8a548f3f7ce9b2ce7b4307c60d4ad",
+    "addons/split_radiance_cascades/preview_controls.gd": "f126e32a98acb3429c443169055132f1db536b61900e8bc9e62122e4566e8fdf",
+    "addons/split_radiance_cascades/receiver_pass.gd": "7cdae5de20665cca8d1ead46d3eb52c81644a5cdff6dad5ce295188d9ea23b97",
+    "addons/split_radiance_cascades/scene_lights.gd": "db80273ad97ef15d4650459afdac29b87a6a5f2b673763c2478fe65e94b9a8ba",
+    "addons/split_radiance_cascades/scene_snapshot.gd": "7ce44f27f984a011e00dc68d2933585b917f394f6eaa1ffbb093a4644d585168",
+    "addons/split_radiance_cascades/shaders/cascades.glsl": "549edbfada2bce829fd2806e51525179e1a827de265b148f6402e30bdb454cd5",
+    "addons/split_radiance_cascades/shaders/grid.inc": "abb17a74a1f2c13ecb165ba0484474ee8774aa92f26a0050426f2a877d8e493c",
+    "addons/split_radiance_cascades/shaders/hardware_trace.glsl": "43fdc65272dd84e4860357763c1145bd5e933e65bbf8fcaf6774bce4a2fe23a6",
+    "addons/split_radiance_cascades/shaders/hit_reflectance.glsl": "c1755375617290346f25381272248bfce317916e618690668a6e0101273773c1",
+    "addons/split_radiance_cascades/shaders/merge.inc": "fa7d87a6c58545ff9391668b07256128db34b3a91dce5533058445463d4d378b",
+    "addons/split_radiance_cascades/shaders/receiver.glsl": "c9d8ce7e48bc0bf75bb6bb372acfb5fed36e53f72007767344e2d0236badd7f1",
+    "addons/split_radiance_cascades/shaders/rt_payload.inc": "70481dd08c297c9181bf0f3704c44ba7cdae0927cc0cfaed1f18aeaafc59bae3",
+    "addons/split_radiance_cascades/shaders/trace.inc": "1f42ce8c02d30ca3f925954ba5d843af3cb165a7d3c7a9c352822e54b837a0c0",
+    "addons/split_radiance_cascades/shaders/trace_bindings.inc": "b7d852016d3e52fddec56299e29be62b8debed0ee7b6e72c666432fb3c59aa7c",
+    "addons/split_radiance_cascades/split_radiance_cascades.gd": "f420b32e755849e353494cd4f66af53b2dcafa6f816f7b2e69fa729f7db46237",
+    "addons/split_radiance_cascades/stage_profiler.gd": "ef4347b427ee99035e279c88245b96ff7f241e840ec3250815ec67a0e783fed6",
+    "addons/split_radiance_cascades/tests/editor_preview_test.gd": "5b3292c40cb47ab30a5b66086587bef0f30c5aa32bd9629b5fd1a708fd740adb",
+    "addons/split_radiance_cascades/tests/interval_bins_test.gd": "38c0019b2bbb2666c2d2d9734c9fa9f232d422b5873e64c8a10062aa72d10d5b",
+    "addons/split_radiance_cascades/tests/render_test.gd": "5b57dd2e43a325958c61dcf805dd0971990aebad0bc903a2d944d8757d79bcb7",
+    "addons/split_radiance_cascades/timing_panel.gd": "8d1bdef1e8cc7c31057a53069d0fb41d87b8084f6d347340eeced02e9871c43f"
+  },
+  "sponza_assets": {
+    "curtains.bin": "8b8b337e7647866d5be52be7f60b93cec4d5aa4e49368a38818168ebb9628976",
+    "curtains.gltf": "ce0e7ba91c2165d5d7d2755382b3fab0602c28686778ef265830a839798d0483",
+    "curtains_trace.glb": "03f18296ad5ea4af66af6b7882fa94b86de6f52e6d30ca7afa42f5db57f60ce3",
+    "palace.bin": "bcfcdc0da6995839097565724e16bd30ffcc5025cdef4d868ffb2601c1a13503",
+    "palace.gltf": "2ebc1755ba7628c29365406123201f5c9c16cbf512efd945169f92c3db7cca7e",
+    "palace_trace.glb": "c2709e0f850de7a10f1c65f91adf3130dd1fbe28c76ed399077b89006c21e561"
+  },
+  "variants": {
+    "original": {
+      "addon_changes": {},
+      "imported_shaders": {
+        "cascades.glsl": "21249a55efcea739b238f93eec49d02cccdb886edb682ae3c90bdebd399566c1",
+        "hardware_trace.glsl": "635678c6eb85835a8ba857a15eb735f5c81fbcdb0e7fe6fefc460e4d64f39ea1",
+        "hit_reflectance.glsl": "40a893d43fe3bf2b0a4959d5bc1f7eadf1086f4efda43920b00e410e55b90cfe",
+        "receiver.glsl": "4ff5f1c0250dace66016d79426aa5073fc9ffde47e3a749c97d4c8525cc49ba9"
+      }
+    },
+    "adaptive": {
+      "addon_changes": {
+        "addons/split_radiance_cascades/shaders/merge.inc": "017425a2af37fffb8eb5ddc31298e5020663983a2d841620deccda75cee9bd87"
+      },
+      "imported_shaders": {
+        "cascades.glsl": "cbe91297ad32419d024d7e5ece755906539bcd6c32fe07d3b7ea4554ea653af9",
+        "hardware_trace.glsl": "635678c6eb85835a8ba857a15eb735f5c81fbcdb0e7fe6fefc460e4d64f39ea1",
+        "hit_reflectance.glsl": "40a893d43fe3bf2b0a4959d5bc1f7eadf1086f4efda43920b00e410e55b90cfe",
+        "receiver.glsl": "4ff5f1c0250dace66016d79426aa5073fc9ffde47e3a749c97d4c8525cc49ba9"
+      }
+    },
+    "sequence": {
+      "addon_changes": {
+        "addons/split_radiance_cascades/shaders/trace.inc": "70a98233c08cd47131147b07ca8f42f41737f69d1486abe852aab2a3a662cef8",
+        "addons/split_radiance_cascades/shaders/trace_bindings.inc": "3c0452ea94ff80617c8d07f9c51c052c1cabcfbee938028e0f3542d295ea9632"
+      },
+      "imported_shaders": {
+        "cascades.glsl": "16e137d24d9ff6455aa1bcfac6a1c10f91c723333e639d6afed0838b3c7a9099",
+        "hardware_trace.glsl": "2774a49120a47199281f2663d57edcd486474c51689922cba55181efa7a85798",
+        "hit_reflectance.glsl": "40a893d43fe3bf2b0a4959d5bc1f7eadf1086f4efda43920b00e410e55b90cfe",
+        "receiver.glsl": "4ff5f1c0250dace66016d79426aa5073fc9ffde47e3a749c97d4c8525cc49ba9"
+      }
+    },
+    "screen": {
+      "addon_changes": {
+        "addons/split_radiance_cascades/cascade_effect.gd": "12397591580c9574b93c7286d01677633fb777139e21cd145d7ad2f684d48945",
+        "addons/split_radiance_cascades/screen_filter.gd": "fb53c8aa54de1f94442a3e9acc73f82e9cfff17926da2b5899bd86c00e29a285",
+        "addons/split_radiance_cascades/shaders/cascades.glsl": "6d3f87bb639837c3ad166c881490d4b9a03b3e40d073074ba7e3cd87e97b66aa",
+        "addons/split_radiance_cascades/shaders/screen_filter.glsl": "f88fbbb9562fa8641b42d386ed501278af70ee6a279bbcb0d66880e92df95257"
+      },
+      "imported_shaders": {
+        "cascades.glsl": "c1a3a0c3efd54dfe7cb3a8cb29122ca8fb8cf9ac0e55689763f5d40fb34827c4",
+        "hardware_trace.glsl": "635678c6eb85835a8ba857a15eb735f5c81fbcdb0e7fe6fefc460e4d64f39ea1",
+        "hit_reflectance.glsl": "40a893d43fe3bf2b0a4959d5bc1f7eadf1086f4efda43920b00e410e55b90cfe",
+        "receiver.glsl": "4ff5f1c0250dace66016d79426aa5073fc9ffde47e3a749c97d4c8525cc49ba9",
+        "screen_filter.glsl": "e24eea6bb21874d9770017ab083c79e40dbc6f20d38c2fde44aab58be0ece521"
+      }
+    },
+    "long_history": {
+      "addon_changes": {
+        "addons/split_radiance_cascades/split_radiance_cascades.gd": "cbd1051eb7a931da29cddf8ba29095921347a680a86aaebb10604d92c9a237b7"
+      },
+      "imported_shaders": {
+        "cascades.glsl": "21249a55efcea739b238f93eec49d02cccdb886edb682ae3c90bdebd399566c1",
+        "hardware_trace.glsl": "635678c6eb85835a8ba857a15eb735f5c81fbcdb0e7fe6fefc460e4d64f39ea1",
+        "hit_reflectance.glsl": "40a893d43fe3bf2b0a4959d5bc1f7eadf1086f4efda43920b00e410e55b90cfe",
+        "receiver.glsl": "4ff5f1c0250dace66016d79426aa5073fc9ffde47e3a749c97d4c8525cc49ba9"
+      }
+    }
+  },
+  "quality_run_headers": {
+    "ctrl98": "Godot Engine v4.7.2.stable.mono.official.ed1daf0bf - https://godotengine.org\nVulkan 1.4.357 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 3070\n\nINPUTS NVIDIA GeForce RTX 3070 quality / ctrl98; stride 6; history 0.98; multi true; omni lights 3; leaf (1.165733, 5.873527, -0.673706)",
+    "adaptive": "Godot Engine v4.7.2.stable.mono.official.ed1daf0bf - https://godotengine.org\nVulkan 1.4.357 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 3070\n\nINPUTS NVIDIA GeForce RTX 3070 quality / adaptive; stride 6; history 0.98; multi true; omni lights 3; leaf (1.165733, 5.873527, -0.673706)",
+    "sequence": "Godot Engine v4.7.2.stable.mono.official.ed1daf0bf - https://godotengine.org\nVulkan 1.4.357 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 3070\n\nINPUTS NVIDIA GeForce RTX 3070 quality / sequence; stride 6; history 0.98; multi true; omni lights 3; leaf (1.165733, 5.873527, -0.673706)",
+    "screen": "Godot Engine v4.7.2.stable.mono.official.ed1daf0bf - https://godotengine.org\nVulkan 1.4.357 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 3070\n\nINPUTS NVIDIA GeForce RTX 3070 quality / screen; stride 6; history 0.98; multi true; omni lights 3; leaf (1.165733, 5.873527, -0.673706)",
+    "ctrl99": "Godot Engine v4.7.2.stable.mono.official.ed1daf0bf - https://godotengine.org\nVulkan 1.4.357 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 3070\n\nINPUTS NVIDIA GeForce RTX 3070 quality / ctrl99; stride 6; history 0.99; multi true; omni lights 3; leaf (1.165733, 5.873527, -0.673706)",
+    "fixed995": "Godot Engine v4.7.2.stable.mono.official.ed1daf0bf - https://godotengine.org\nVulkan 1.4.357 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 3070\n\nINPUTS NVIDIA GeForce RTX 3070 quality / fixed995; stride 6; history 0.995; multi true; omni lights 3; leaf (1.165733, 5.873527, -0.673706)"
+  }
+}

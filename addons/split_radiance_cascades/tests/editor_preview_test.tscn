@@ -1,0 +1,41 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/split_radiance_cascades/tests/editor_preview_test.gd" id="1_test"]
+[ext_resource type="Script" path="res://addons/split_radiance_cascades/split_radiance_cascades.gd" id="2_gi"]
+
+[sub_resource type="CompositorEffect" id="AuthoredEffect"]
+enabled = false
+[sub_resource type="Compositor" id="AuthoredChain"]
+compositor_effects = Array[CompositorEffect]([SubResource("AuthoredEffect")])
+[sub_resource type="Environment" id="Dark"]
+background_mode = 1
+background_color = Color(0, 0, 0, 1)
+ambient_light_source = 1
+reflected_light_source = 1
+[sub_resource type="BoxMesh" id="Slab"]
+size = Vector3(8, 0.1, 8)
+
+[node name="EditorPreviewTest" type="Node3D"]
+script = ExtResource("1_test")
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Dark")
+compositor = SubResource("AuthoredChain")
+[node name="GI" type="Node" parent="WorldEnvironment"]
+script = ExtResource("2_gi")
+preview_in_editor = true
+history_retention = 0.99
+multi_bounce = false
+[node name="NoPreviewSun" type="DirectionalLight3D" parent="."]
+light_energy = 0.0
+[node name="Receiver" type="MeshInstance3D" parent="."]
+position = Vector3(0, 2, 0)
+mesh = SubResource("Slab")
+[node name="Reflector" type="MeshInstance3D" parent="."]
+position = Vector3(0, 5, 0)
+mesh = SubResource("Slab")
+[node name="PointLight" type="OmniLight3D" parent="."]
+position = Vector3(0, 4.45, 0)
+light_color = Color(1, 0, 0, 1)
+light_energy = 3.0
+omni_range = 2.0
+omni_attenuation = 1.0
