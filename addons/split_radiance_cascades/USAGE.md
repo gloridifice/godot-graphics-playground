@@ -10,6 +10,8 @@
 
 **F6 运行时**：**1 / 2 / 3** 切换中庭、上层回廊、底层拱廊；**WASD** 飞行、**方向键** 转向、**Q/E** 降低／升高、**Shift** 加速，不捕获鼠标。G/B/V/C 与小房间相同。按 G 观察背光布帘和柱廊的亮度变化。场景使用 Intel Sponza 2022 与 Colorful Curtains；约 43 万个可见三角形及 2K JPG（质量 85）PBR 贴图用于画面和接收面，隐藏的同源代理仅用于射线，没有上游烘焙 GI。[模型与授权说明](../../assets/sponza/SOURCE.md)。
 
+**第一人称持火把**：在运行中的 Sponza 按 **F** 从当前位置落地，或对[火把步行场景](../../scenes/sponza_torch_walk.tscn)按 **F6** 从底层拱廊开始，再按 **F** 锁定鼠标。鼠标转头，**WASD** 行走，**Shift** 跑步；**T** 熄灭／点亮火把，**G** 只切换 GI，适合在墙边比较直射与反弹光。**Esc** 释放鼠标，**Tab** 收起火把并回到飞行视角。专用入口使用软件 BVH 和现有建筑／布幔追踪代理，不需要硬件光追。走动时不会因每个脚步清空整场 GI：火把对局部照明的贡献越大，探针越快采信新光照；几乎不贡献间接光的灯移动，不会迫使整片拱顶重新积累。运动时仅对主探针最终显示的间接光短时平滑，不平滑原生直射、阴影或次级反弹。火苗动画本身不改灯光能量。
+
 两个场景运行时右上角默认显示毫秒表，**P** 隐藏面板并停止采样，再按恢复。`Viewport` 是 Godot 对该视口的渲染 CPU／GPU 时间，不是整个进程的 CPU 时间，也不是用 FPS 换算的帧间隔。`SRC total` 是同一个 SRC 回调内八段之和：Prepare（含绑定与参数更新）、Trace（含可选次级射线）、Gather、Parents（全部父级）、Deposit、Merge（全部级联）、Receiver（光栅化接收面底色）、Apply（探针插值与合成）。与旧版比较材质读取和合成开销时，用 **Receiver + Apply** 对照旧 Apply。CPU 列是渲染线程提交命令的时间，GPU 列来自设备时间戳，两列不能相加。
 
 SRC 最快每 250 ms 采一次，异步读取已完成帧，不等待 GPU。视口与 SRC 两行不一定来自同一帧；首次预热、SRC 关闭、没有有效 GPU 时间等均显示 `—`，不是 0 ms。首帧主线程构建静态 BVH 的耗时不在逐帧 SRC 表内。普通场景没有面板时，`Profile Stages` 默认关闭；需要自定义 HUD 可开启它并订阅节点的 `timings_updated(times_ms)`。
@@ -19,7 +21,7 @@ SRC 最快每 250 ms 采一次，异步读取已完成帧，不等待 GPU。视�
 1. 使用 **Forward+、单目、关闭 MSAA 3D**。将整个 `addons/split_radiance_cascades/` 放入项目，等待 Godot 导入 GLSL。无需启用编辑器插件。
 2. 在生效的 `WorldEnvironment` 下添加一个 **SplitRadianceCascades** 子节点。保留相机的 Compositor 为空，让它使用世界的合成链。节点在运行时追加效果，退出时恢复原链。需要在 3D 编辑视口中查看时勾选 **Preview In Editor**（新节点默认关闭，两个示例均已开启）。预览只覆盖当前编辑世界的渲染合成链，不改写场景中保存的 Compositor；关闭预览或切换场景会撤下效果并释放其 GPU 资源。
 3. `Source Root` 指向要参与 GI 的静态网格与灯光的共同父节点；留空取当前场景。用 `split_rc_ignore` 分组排除整个子树。高面数模型可另指定 `Trace Proxy Root`：提供世界位置对齐的低模，隐藏其根节点。此时所有射线只对代理求交，可见接收面与灯光仍取自 `Source Root`。留空则用同一几何显示和追踪。先用一块白色接收面和一块有面积的自发光面检查效果；对照时关闭其他 GI，避免间接光叠加。
-4. `Source Root` 内的 Directional／Omni 灯可实时移动、调色、调能量（含 `Indirect Energy`）、调整点光源范围／衰减，以及显示／隐藏、添加／删除。有效灯光变化时只上传灯光数据、清空探针历史，不重建 BVH 或接收面。移动相机也不需要重建。修改静态几何、材质、网格可见性或源／代理路径后，才在 Inspector 点 **Rebuild GI Snapshot**，或在运行时调用 `rebuild()`。仅显示 `Strength` / `View` 的调整不清历史。
+4. `Source Root` 内的 Directional／Omni 灯可实时移动、调色、调能量（含 `Indirect Energy`）、调整点光源范围／衰减，以及显示／隐藏、添加／删除。灯光变化只上传新灯光数据，不重建 BVH 或接收面。点光源小步移动时保留探针和射线采样序号，根据移动距离在附近降低旧光照权重；不冻结新光，也不加射线。点灯／熄灯、改颜色或能量、改范围／衰减、转动方向灯及大幅移位仍清空历史。局部影响范围是近似值，并非精确追踪过每条反弹光路。移动相机也不需要重建。修改静态几何、材质、网格可见性或源／代理路径后，才在 Inspector 点 **Rebuild GI Snapshot**，或在运行时调用 `rebuild()`。仅显示 `Strength` / `View` 的调整不清历史。
 
 | 参数 | 调整效果 |
 | --- | --- |
@@ -39,7 +41,7 @@ SRC 最快每 250 ms 采一次，异步读取已完成帧，不等待 GPU。视�
 - [`trace.inc`](shaders/trace.inc) 从反向 Z 深度和法线重建出发点，以扰动的 R2 序列采样半球并求最近交点。入射辐射来自自发光、命中面上带遮挡的近似直接光，以及可选的上一帧反弹。
 - [`grid.inc`](shaders/grid.inc) 为采样到的表面分配底层格，再由活跃子格生成父格。四个级联的方向桶数为 **8 / 32 / 128 / 512**。完整格键包含有符号位置与 LOD／主次缓存标识；桶槽冲突时不借用别的格子的历史。
 - [`merge.inc`](shaders/merge.inc) 在首次命中的区间记录光，在此前穿过的区间记录透射率。只累计**未合并的局部区间**，然后从远到近计算 `L近 + T近 × L远`。没有当前样本和有效历史的方向不参与合并；测得黑色遮挡仍是有效样本，只有测得透射才会引入远处光。四个子方向合为一个父方向；空间上只混合存在的邻居，按三线性权重与样本置信度归一化。
-- [`receiver_pass.gd`](receiver_pass.gd) 按材质批绘制快照三角形，只在与视口深度匹配的像素写入底色；不改视口深度。Apply 按法线对底层方向积分，乘以采样到的线性漫反射率，再写回 HDR。没有匹配的接收面不加 GI；不再为每个像素追一条 BVH 射线，也不用已照亮的屏幕颜色代替 albedo。
+- [`receiver_pass.gd`](receiver_pass.gd) 按材质批绘制快照三角形，只在与视口深度匹配的像素写入底色，不改视口深度。从侧面看拱顶等斜面时，允许当前三角形在屏幕上偏移 1/256 像素对应的深度误差；只在原容差小于 2 mm 视深时放宽，且不超过该上限。这不需要给整幅画面放宽遮挡判定。Apply 按法线对底层方向积分，乘以采样到的线性漫反射率，再写回 HDR。没有匹配的接收面不加 GI；不再为每个像素追一条 BVH 射线，也不用已照亮的屏幕颜色代替 albedo。
 
 ## 适用范围
 
@@ -56,12 +58,13 @@ SRC 最快每 250 ms 采一次，异步读取已完成帧，不等待 GPU。视�
 godot --path . --script res://addons/split_radiance_cascades/tests/interval_bins_test.gd
 godot --path . --script res://addons/split_radiance_cascades/tests/render_test.gd --max-fps 90
 godot --path . --script res://tests/sponza_src_preview_test.gd --max-fps 90
+godot --path . --script res://tests/sponza_torch_walk_test.gd --max-fps 90
 godot --path . --editor res://addons/split_radiance_cascades/tests/editor_preview_test.tscn -- --test-src-editor
 ```
 
 最后一条启动独立编辑器并在检查后退出：从 3D 编辑视口读回照明，验证点光源切色及关闭间接光时无需重建、不留旧色；静态反射面仍需手动重建。也检查预览开关、默认 `Source Root` 和保存隔离。
 
-方向桶测试让同一个亮父级对应未采样、遮挡和透射方向，回读真实 GPU 结果并检查过渡带的样本权重。运行时画面测试区分远处真实命中与未命中，也检查近遮挡、稳定世界格、次级反弹、贴图反射率、被排除表面、动态点光源的增删与父节点变换／可见性，以及卸载恢复。以上测试与 Sponza 预览测试均在 Godot 4.7.2 / Forward+ / RTX 3070 上通过 D3D12 和 Vulkan。修改共享的 `shaders/*.inc` 后重新导入 `cascades.glsl` 和 `hardware_trace.glsl`。运行时渲染测试、编辑器测试的用户参数可追加 `--prefer-hardware-trace` 检查硬件路径或设备回退。
+方向桶测试让同一个亮父级对应未采样、遮挡和透射方向，回读真实 GPU 结果并检查过渡带的样本权重。运行时画面测试区分远处真实命中与未命中，也检查近遮挡、稳定世界格、次级反弹、贴图反射率、相机移动时掠视表面的间接光及其前方排除面是否保持遮挡、动态点光源的增删与父节点变换／可见性，以及卸载恢复。以上测试与 Sponza 预览测试均在 Godot 4.7.2 / Forward+ / RTX 3070 上通过 D3D12 和 Vulkan。修改共享的 `shaders/*.inc` 后重新导入 `cascades.glsl` 和 `hardware_trace.glsl`。运行时渲染测试、编辑器测试的用户参数可追加 `--prefer-hardware-trace` 检查硬件路径或设备回退。
 
 ### Sponza View 3：软件与硬件求交实测
 

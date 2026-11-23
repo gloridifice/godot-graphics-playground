@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/sponza_src_preview.tscn" id="1_sponza"]
+
+[node name="SponzaTorchWalk" instance=ExtResource("1_sponza")]
+
+[node name="SplitRadianceCascades" parent="WorldEnvironment" index="0"]
+trace_proxy_root = NodePath("../../Subject/TraceProxy")
+prefer_hardware_trace = false
+
+[node name="Camera3D" parent="." index="3"]
+start_on_foot = true

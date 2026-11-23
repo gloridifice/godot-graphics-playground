@@ -39,6 +39,8 @@ var _slots := 0
 var _ray_bytes := 0
 var _origin := Vector3.ZERO
 var _light_count := 0
+var _last_lights := PackedVector4Array()
+var _light_travel := PackedFloat32Array() # pending path length in base probe cells, per packed light
 var _frame := 0
 var _failed := false
 var _warned_view := false
@@ -56,6 +58,7 @@ func configure(tuning: Vector4, options: Vector4i, strength: float, reset: bool)
 	_editor_views.clear()
 	if reset:
 		_frame = 0
+		_light_travel = PackedFloat32Array()
 	_tuning = tuning
 	_options = options
 	_strength = strength
@@ -141,13 +144,13 @@ func replace_scene(snapshot: Snapshot, lights: PackedVector4Array) -> void:
 	if not _receiver.bake_hit_materials(snapshot, _scene_buffers[2]):
 		_failure("ray hit material reflectance")
 		return
-	replace_lights(lights)
+	replace_lights(lights, true) # a new geometry/material snapshot always invalidates the probes
 
 func _has_light_buffer() -> bool:
 	# A retained @tool instance can have Nil in a newly added RID member after reload.
 	return typeof(_light_buffer) == TYPE_RID and _light_buffer.is_valid()
 
-func replace_lights(lights: PackedVector4Array) -> void:
+func replace_lights(lights: PackedVector4Array, new_scene := false) -> void:
 	if _failed or _scene_buffers.size() != 3:
 		return
 	# Allocate independently of the pipeline; a reloaded instance can already have one.
@@ -162,10 +165,46 @@ func replace_lights(lights: PackedVector4Array) -> void:
 			_failure("light buffer upload")
 			return
 	_light_count = lights.size() >> 1 # A zero count bypasses stale entries in the buffer.
-	_reset_light_history()
+	if new_scene or not _queue_light_travel(lights):
+		_reset_light_history()
+	else:
+		_request_light_redraw() # keep the probe keys, bounce feedback and sampling phase
+	_last_lights = lights
+
+func _queue_light_travel(lights: PackedVector4Array) -> bool:
+	if _frame == 0 or typeof(_last_lights) != TYPE_PACKED_VECTOR4_ARRAY or lights.size() != _last_lights.size():
+		return false
+	for i in range(0, lights.size(), 2):
+		var a := _last_lights[i]
+		var b := lights[i]
+		if a.w != b.w or lights[i+1] != _last_lights[i+1]: return false # range, energy, color or falloff
+		if a == b: continue
+		var step := a.distance_to(b) # same radius: this is the 3D displacement
+		if b.w <= 0.0 or step > minf(0.25*b.w, 2.0*_tuning.x): return false # directional edit or teleport
+		if _light_travel.is_empty(): _light_travel.resize(_light_count)
+		_light_travel[i >> 1] += step / _tuning.x
+	return true
+
+func _consume_light_travel() -> Vector2i:
+	var words := Vector2i.ZERO
+	if typeof(_light_travel) != TYPE_PACKED_FLOAT32_ARRAY: return words # retained @tool instance on script reload
+	for i in _light_travel.size():
+		# Spread each step over a few draws (physics and render rates differ). Two
+		# exactly representable 24-bit integers fit in spare lanes of the existing UBO.
+		# Emit 20% of pending travel per draw. Keep a short tail so the display
+		# history releases gradually when a light stops; don't amplify total travel.
+		_light_travel[i] *= 0.8
+		var code := clampi(roundi(63.0*sqrt(_light_travel[i] * 0.25)), 0, 63)
+		words[i >> 2] |= code << (6*(i & 3))
+	if words == Vector2i.ZERO and not _light_travel.is_empty(): _light_travel.clear()
+	return words
 
 func _reset_light_history() -> void:
 	_frame = 0 # PREPARE clears both probe banks before TRACE can read history.
+	_light_travel = PackedFloat32Array()
+	_request_light_redraw()
+
+func _request_light_redraw() -> void:
 	_editor_views.clear()
 	if editor_redraw.is_valid():
 		editor_redraw.call_deferred()
@@ -222,7 +261,8 @@ func _render_callback(_type: int, data: RenderData) -> void:
 	values.append_array(_layout)
 	values.append_array(PackedVector4Array([_tuning]).to_byte_array())
 	values.append_array(PackedInt32Array([size.x, size.y, stride, _frame, _options.y, _options.z, _options.w, _light_count]).to_byte_array())
-	values.append_array(PackedFloat32Array([_strength, 0, 0, 0]).to_byte_array())
+	var travel := _consume_light_travel()
+	values.append_array(PackedFloat32Array([_strength, travel.x, travel.y, 0]).to_byte_array())
 	_rd.buffer_update(_params, 0, PARAM_BYTES, values)
 	var tile_groups := (tiles + Vector2i(7,7)) / 8
 	_dispatch(bindings, Stage.PREPARE, 0, Vector2i((_slots+63)/64, 1))

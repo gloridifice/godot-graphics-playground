@@ -21,6 +21,7 @@ void deposit(Ray ray, int tag, uint mass) {
 }
 shared uint neighbors[8];
 shared float spatial[8];
+shared float display_history;
 shared float old_decay;
 void merge_probe(int c) {
 	uint id = active_ids[p.slot_base[c] + gl_WorkGroupID.x];
@@ -28,6 +29,10 @@ void merge_probe(int c) {
 	if (lane == 0u) {
 		uint previous = slots[id].z;
 		old_decay = previous == 0u ? 0.0 : pow(p.tuning.w,float(uint(p.grid.w)-previous));
+		motion_loss = light_motion_loss(slots[id].x,c);
+		// Filter only consecutive observations of the same primary base probe.
+		display_history = c == 0 && tag_of(slots[id].x) < 4 && previous != 0u && previous+1u == uint(p.grid.w) ?
+			min(p.tuning.w,0.87)*smoothstep(0.0,0.004,motion_loss) : 0.0;
 		slots[id].z = uint(p.grid.w);
 	}
 	if (c < 3 && lane < 8u) {
@@ -48,6 +53,7 @@ void merge_probe(int c) {
 		// Accumulate only the LOCAL interval. Re-feeding the merged result here
 		// would count the same far light once per frame even without a bounce.
 		float old_count = old_decay > 0.0 ? bins[b].weight*old_decay : 0.0;
+		old_count = relight_weight(old_count,count);
 		if (old_count > 0.0) sum += bins[b].interval * old_count;
 		count += old_count;
 		if (count < 1e-5) count = 0.0;
@@ -79,6 +85,8 @@ void merge_probe(int c) {
 		}
 		// Only local evidence can validate a direction. An opaque black hit is
 		// valid with T=0; an unsampled direction is invalid even above a lit parent.
-		bins[b].merged = vec4(local.rgb + local.a*far_light, count);
+		vec3 radiance = local.rgb + local.a*far_light;
+		if (display_history > 0.0 && old_count > 0.0) radiance = mix(radiance,bins[b].merged.rgb,display_history);
+		bins[b].merged = vec4(radiance, count);
 	}
 }

@@ -13,6 +13,7 @@ layout(set=0,binding=13) uniform sampler2D receiver_tex;
 
 #include "grid.inc"
 #include "trace.inc"
+#include "light_motion.inc"
 #include "merge.inc"
 
 void apply_pixel(ivec2 pixel) {
@@ -59,7 +60,7 @@ void main() {
 		uint key = slots[active_ids[p.slot_base[c]+lane]].x;
 		acquire(c+1,key_for(cell_of(key) >> 1,tag_of(key)));
 	} else if (cmd.stage == 5) {
-		merge_probe(c);
+		merge_probe(c); // Motion smoothing is confined to the primary display result.
 	} else if (cmd.stage == 7) { // stage 6 is the receiver raster draw
 		apply_pixel(ivec2(gl_GlobalInvocationID.xy));
 	} else {

@@ -1,0 +1,212 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/sponza_walk/player.gd" id="1"]
+[ext_resource type="Shader" path="res://scenes/sponza_walk/flame.gdshader" id="2"]
+[ext_resource type="Texture2D" path="res://assets/sponza/textures/wood_tile_01_basecolor.jpg" id="3_wood"]
+[ext_resource type="Texture2D" path="res://assets/sponza/textures/curtain_fabric_normal.jpg" id="4_weave"]
+[ext_resource type="Shader" path="res://scenes/sponza_walk/wick.gdshader" id="5_wick"]
+
+[sub_resource type="CapsuleShape3D" id="Capsule"]
+radius = 0.38
+height = 1.82
+
+[sub_resource type="StandardMaterial3D" id="Wood"]
+albedo_color = Color(0.65, 0.48, 0.35, 1)
+albedo_texture = ExtResource("3_wood")
+uv1_scale = Vector3(0.55, 0.85, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="Iron"]
+albedo_color = Color(0.16, 0.135, 0.115, 1)
+metallic = 0.62
+roughness = 0.56
+
+[sub_resource type="ShaderMaterial" id="Wick"]
+shader = ExtResource("5_wick")
+shader_parameter/grain = ExtResource("3_wood")
+
+[sub_resource type="StandardMaterial3D" id="Leather"]
+albedo_color = Color(0.115, 0.062, 0.038, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Sleeve"]
+albedo_color = Color(0.10, 0.11, 0.12, 1)
+normal_enabled = true
+normal_texture = ExtResource("4_weave")
+roughness = 1.0
+
+[sub_resource type="ShaderMaterial" id="Fire"]
+shader = ExtResource("2")
+
+[sub_resource type="CylinderMesh" id="Handle"]
+material = SubResource("Wood")
+top_radius = 0.026
+bottom_radius = 0.019
+height = 0.35
+radial_segments = 12
+rings = 0
+
+[sub_resource type="CylinderMesh" id="Cup"]
+material = SubResource("Iron")
+top_radius = 0.049
+bottom_radius = 0.027
+height = 0.062
+radial_segments = 12
+rings = 0
+
+[sub_resource type="TorusMesh" id="Band"]
+material = SubResource("Iron")
+inner_radius = 0.021
+outer_radius = 0.030
+rings = 14
+ring_segments = 6
+
+[sub_resource type="SphereMesh" id="Fuel"]
+material = SubResource("Wick")
+radius = 0.046
+height = 0.070
+radial_segments = 12
+rings = 5
+
+[sub_resource type="QuadMesh" id="FlameQuad"]
+material = SubResource("Fire")
+size = Vector2(0.110, 0.163)
+
+[sub_resource type="SphereMesh" id="Glove"]
+material = SubResource("Leather")
+radius = 1.0
+height = 2.0
+radial_segments = 16
+rings = 8
+
+[sub_resource type="CylinderMesh" id="Cuff"]
+material = SubResource("Sleeve")
+top_radius = 0.050
+bottom_radius = 0.066
+height = 0.15
+radial_segments = 12
+rings = 0
+
+[node name="TorchPlayer" type="CharacterBody3D"]
+collision_layer = 2
+floor_snap_length = 0.16
+script = ExtResource("1")
+
+[node name="Capsule" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.91, 0)
+shape = SubResource("Capsule")
+
+[node name="Eyes" type="Camera3D" parent="."]
+position = Vector3(0, 1.62, 0)
+fov = 67.0
+near = 0.04
+far = 90.0
+
+[node name="Hold" type="Node3D" parent="Eyes"]
+position = Vector3(0.208, -0.136, -0.269)
+rotation_degrees = Vector3(-14, 5, 12)
+
+[node name="Torchlight" type="OmniLight3D" parent="Eyes/Hold"]
+position = Vector3(0, 0.137, 0)
+light_cull_mask = 1
+light_color = Color(1, 0.70, 0.39, 1)
+light_energy = 3.0
+light_indirect_energy = 5.0
+shadow_enabled = true
+omni_range = 7.5
+omni_attenuation = 1.55
+
+[node name="HandFill" type="OmniLight3D" parent="Eyes/Hold" groups=["split_rc_ignore"]]
+position = Vector3(-0.06, 0.20, 0.15)
+light_cull_mask = 2
+light_color = Color(1, 0.79, 0.59, 1)
+light_energy = 0.58
+light_indirect_energy = 0.0
+omni_range = 0.65
+omni_attenuation = 1.0
+
+[node name="Model" type="Node3D" parent="Eyes/Hold" groups=["split_rc_ignore"]]
+scale = Vector3(0.64, 0.64, 0.64)
+
+[node name="Shaft" type="MeshInstance3D" parent="Eyes/Hold/Model"]
+position = Vector3(0, -0.040, 0)
+cast_shadow = 0
+mesh = SubResource("Handle")
+
+[node name="Collar" type="MeshInstance3D" parent="Eyes/Hold/Model"]
+position = Vector3(0, 0.149, 0)
+cast_shadow = 0
+mesh = SubResource("Cup")
+
+[node name="CollarLip" type="MeshInstance3D" parent="Eyes/Hold/Model"]
+position = Vector3(0, 0.177, 0)
+scale = Vector3(1.70, 1.0, 1.70)
+cast_shadow = 0
+mesh = SubResource("Band")
+
+[node name="Ferrule" type="MeshInstance3D" parent="Eyes/Hold/Model"]
+position = Vector3(0, 0.112, 0)
+cast_shadow = 0
+mesh = SubResource("Band")
+
+[node name="Band" type="MeshInstance3D" parent="Eyes/Hold/Model"]
+position = Vector3(0, 0.093, 0)
+cast_shadow = 0
+mesh = SubResource("Band")
+
+[node name="Wick" type="MeshInstance3D" parent="Eyes/Hold/Model"]
+position = Vector3(0, 0.180, 0)
+cast_shadow = 0
+mesh = SubResource("Fuel")
+
+[node name="Flame" type="MeshInstance3D" parent="Eyes/Hold/Model"]
+position = Vector3(0, 0.279, 0.006)
+cast_shadow = 0
+mesh = SubResource("FlameQuad")
+
+[node name="Palm" type="MeshInstance3D" parent="Eyes/Hold/Model"]
+position = Vector3(0.026, 0.008, 0.009)
+scale = Vector3(0.033, 0.053, 0.032)
+cast_shadow = 0
+mesh = SubResource("Glove")
+
+[node name="Knuckles" type="Node3D" parent="Eyes/Hold/Model"]
+position = Vector3(-0.002, 0.007, 0.019)
+rotation_degrees = Vector3(0, -6, 12)
+
+[node name="Index" type="MeshInstance3D" parent="Eyes/Hold/Model/Knuckles"]
+position = Vector3(0, 0.027, 0)
+scale = Vector3(0.032, 0.012, 0.015)
+cast_shadow = 0
+mesh = SubResource("Glove")
+
+[node name="Middle" type="MeshInstance3D" parent="Eyes/Hold/Model/Knuckles"]
+position = Vector3(-0.001, 0.009, 0.003)
+scale = Vector3(0.032, 0.012, 0.016)
+cast_shadow = 0
+mesh = SubResource("Glove")
+
+[node name="Ring" type="MeshInstance3D" parent="Eyes/Hold/Model/Knuckles"]
+position = Vector3(0, -0.010, 0.002)
+scale = Vector3(0.030, 0.012, 0.015)
+cast_shadow = 0
+mesh = SubResource("Glove")
+
+[node name="Pinky" type="MeshInstance3D" parent="Eyes/Hold/Model/Knuckles"]
+position = Vector3(0.004, -0.028, 0)
+scale = Vector3(0.025, 0.010, 0.013)
+cast_shadow = 0
+mesh = SubResource("Glove")
+
+[node name="Thumb" type="MeshInstance3D" parent="Eyes/Hold/Model"]
+position = Vector3(0.030, 0.029, 0.030)
+rotation_degrees = Vector3(10, 0, -39)
+scale = Vector3(0.015, 0.033, 0.016)
+cast_shadow = 0
+mesh = SubResource("Glove")
+
+[node name="Sleeve" type="MeshInstance3D" parent="Eyes/Hold/Model"]
+position = Vector3(0.080, -0.060, 0.043)
+rotation_degrees = Vector3(-19, 0, 39)
+cast_shadow = 0
+mesh = SubResource("Cuff")

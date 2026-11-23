@@ -188,6 +188,8 @@ func _run() -> void:
 	gi.free()
 	var removed := await _center(4)
 	_check(world.compositor == prior && removed.r < 0.02, "detaching restores the original compositor and unlit image")
+	geometry.free()
+	await _grazing_receiver(scene, world, camera, red)
 	print("Split RC render test: %d failure(s)" % failures)
 	quit(1 if failures else 0)
 
@@ -246,6 +248,74 @@ func _textured_hit(geometry: Node3D, ceiling: MeshInstance3D, gi: RC) -> void:
 	_check(expected.g > 0.05 and _rgb_distance(expected,actual) < 0.035,
 		"textured off-screen hits bounce like the equivalent linear diffuse material: reference=%s textured=%s" % [expected,actual])
 	lamp.free()
+
+# The green and blue emission identify what the native renderer actually drew.
+# Only the hidden enclosing box emits red; its GI belongs on green, never blue.
+func _grazing_receiver(scene: Node3D, world: WorldEnvironment, camera: Camera3D, red: Material) -> void:
+	root.size = Vector2i(512,288)
+	scene.position = Vector3(35.6,4.3,-61.1)
+	scene.rotation = Vector3(0.103,1.65,0.07)
+	camera.transform = Transform3D.IDENTITY
+	camera.set_perspective(59.0,0.05,40.0)
+	var geometry := Node3D.new()
+	geometry.name = "Grazing"
+	scene.add_child(geometry)
+	var pose := Transform3D(Basis.from_euler(Vector3(0.035,1.545,0.216)), Vector3(0.02,0,-4.8))
+	_marked_panel(geometry, pose, Vector2(6.4,2.2), Color.GREEN)
+	# Nearly edge-on: even this small normal offset separates the depths along the view ray.
+	pose.origin += pose.basis.y*0.35 + pose.basis.z*0.00016
+	_marked_panel(geometry, pose, Vector2(4.8,0.34), Color.BLUE).add_to_group(&"split_rc_ignore")
+	var lamp := _box(geometry, Vector3.ZERO, Vector3.ONE*18, red)
+	lamp.name = "TraceLamp"
+	lamp.hide()
+	var gi := RC.new()
+	gi.source_root = ^"../../Grazing"
+	gi.trace_proxy_root = ^"../../Grazing/TraceLamp"
+	gi.prefer_hardware_trace = OS.get_cmdline_user_args().has("--prefer-hardware-trace")
+	gi.ray_stride = 1
+	gi.probe_spacing = 0.75
+	gi.multi_bounce = false
+	world.add_child(gi)
+	await _image(55)
+	var worst_dark := 0.0
+	var worst_spill := 0.0
+	var min_receiver := 1000000
+	var min_cover := 1000000
+	for i in range(0,90,2):
+		camera.position = Vector3(0.065+0.04*sin(i*0.039), 0, (i-45)*0.0113)
+		camera.reset_physics_interpolation()
+		var im := await _image(2)
+		var visible := 0; var dark := 0; var covered := 0; var spill := 0
+		for y in range(92,192):
+			for x in range(216,296):
+				var pixel := im.get_pixel(x,y)
+				if pixel.g > 0.8 and pixel.b < 0.1:
+					visible += 1
+					if pixel.r < 0.18: dark += 1
+				elif pixel.b > 0.8 and pixel.g < 0.1:
+					covered += 1
+					if pixel.r > 0.1: spill += 1
+		min_receiver = mini(min_receiver,visible)
+		min_cover = mini(min_cover,covered)
+		worst_dark = maxf(worst_dark,float(dark)/maxi(visible,1))
+		worst_spill = maxf(worst_spill,float(spill)/maxi(covered,1))
+	_check(min_receiver > 1000 and worst_dark < 0.05, "grazing receiver stays lit during camera travel: worst dark %.2f%%" % (100*worst_dark))
+	_check(min_cover > 100 and worst_spill < 0.01, "grazing excluded overlay stays unlit: worst spill %.2f%%" % (100*worst_spill))
+	gi.free()
+
+func _marked_panel(parent: Node3D, pose: Transform3D, size: Vector2, marker: Color) -> MeshInstance3D:
+	var mat := StandardMaterial3D.new()
+	mat.emission_enabled = true
+	mat.emission = marker
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var mesh := QuadMesh.new()
+	mesh.material = mat
+	mesh.size = size
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	node.transform = pose
+	parent.add_child(node)
+	return node
 
 func _box(parent: Node3D, pos: Vector3, size: Vector3, mat: Material) -> MeshInstance3D:
 	var mesh := BoxMesh.new()

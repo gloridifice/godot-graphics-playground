@@ -21,10 +21,17 @@ void main() {
 	// The viewport depth is read-only. Ignored / dynamic occluders still mask
 	// receivers. Use a small depth tolerance for the different transform paths.
 	float depth = texelFetch(scene_depth,ivec2(gl_FragCoord.xy),0).r;
-	// In orthographic projection clip W is constant: a relative tolerance
-	// near depth=1 could accept surfaces centimetres apart at a long far plane.
 	vec3 w_row = vec3(pc.world_to_clip[0].w,pc.world_to_clip[1].w,pc.world_to_clip[2].w);
-	float epsilon = all(equal(w_row,vec3(0))) ? 2e-7 : max(2e-7,depth*2e-5);
+	vec3 z_row = vec3(pc.world_to_clip[0].z,pc.world_to_clip[1].z,pc.world_to_clip[2].z);
+	float z = gl_FragCoord.z;
+	float base = all(equal(w_row,vec3(0))) ? 2e-7 : max(2e-7,depth*2e-5);
+	// A subpixel difference in projected vertices produces a larger depth error
+	// on a grazing triangle. Use its own slope, never a neighboring occluder's.
+	float slope_error = fwidth(z) * (1.0/256.0);
+	// |grad_world(clip_z / clip_w)| converts 2 mm of axial separation to depth
+	// for either projection. Never widen past that cap or shrink the old floor.
+	float cap = 0.002 * gl_FragCoord.w * length(z_row - z*w_row);
+	float epsilon = max(base, min(base + slope_error, cap));
 	vec2 dx = dFdx(uv), dy = dFdy(uv); // get mip gradients before the nonuniform discard
 	if (depth <= 0.0 || abs(depth-gl_FragCoord.z) > epsilon) discard;
 	float metal = dot(pc.metal_weights, textureGrad(metallic_map,uv,dx,dy));

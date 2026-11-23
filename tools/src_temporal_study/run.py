@@ -73,7 +73,8 @@ def prepare(out, engine, variant):
         else: manifest(p) # setter only; no shader changes
         return
     p.mkdir()  # never overwrite or delete an existing project
-    for rel in [ADDON, Path('assets/sponza')]:
+    # The preview camera references the torch prefab but the study stays in fly mode.
+    for rel in [ADDON, Path('assets/sponza'), Path('scenes/sponza_walk')]:
         shutil.copytree(ROOT/rel,p/rel)
     for rel in ['scenes/sponza_src_preview.tscn','scripts/camera/sponza_preview_camera.gd','scripts/camera/sponza_preview_camera.gd.uid','tools/profile_sponza_src.gd','tools/profile_sponza_src.gd.uid','icon.svg','icon.svg.import']:
         (p/rel).parent.mkdir(exist_ok=True,parents=True)
