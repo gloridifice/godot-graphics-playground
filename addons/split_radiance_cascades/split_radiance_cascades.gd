@@ -11,7 +11,8 @@ const Profiler := preload("stage_profiler.gd")
 ## One completed callback, milliseconds per stage: Vector2(CPU submission, GPU execution).
 ## An empty sample invalidates old timings (effect off, reset or no session).
 signal timings_updated(times_ms: Dictionary)
-enum View { COMPOSITE, INDIRECT_ONLY, PROBE_CELLS, LOD_BLEND, LOCAL_INTERVAL }
+enum View { COMPOSITE, INDIRECT_ONLY, PROBE_CELLS, LOD_BLEND, LOCAL_INTERVAL, DIRECT_ONLY }
+enum DirectMode { RESTIR, RAW_RESTIR, SINGLE_FRAME_RIS, ALL_LIGHTS }
 
 @export var enabled := true:
 	set(value):
@@ -44,6 +45,12 @@ enum View { COMPOSITE, INDIRECT_ONLY, PROBE_CELLS, LOD_BLEND, LOCAL_INTERVAL }
 		if value == prefer_hardware_trace: return
 		prefer_hardware_trace = value
 		if _effect: rebuild()
+## Use visible triangles for precise hardware shadows, and the assigned proxy on software.
+@export var hardware_trace_visible_geometry := false:
+	set(value):
+		if value == hardware_trace_visible_geometry: return
+		hardware_trace_visible_geometry = value
+		if _effect: rebuild()
 @export_range(0.0, 4.0, 0.01) var strength := 1.0:
 	set(value):
 		strength = maxf(0.0, value)
@@ -74,6 +81,16 @@ enum View { COMPOSITE, INDIRECT_ONLY, PROBE_CELLS, LOD_BLEND, LOCAL_INTERVAL }
 	set(value):
 		multi_bounce = value
 		_sync(true)
+## Applies to ReSTIRPointLight3D nodes. Ordinary Godot lights keep native direct shading.
+@export var direct_mode: DirectMode = DirectMode.RESTIR:
+	set(value):
+		direct_mode = value
+		_sync(false)
+## Maximum unresolved direct diffuse contribution per linear HDR channel in ReSTIR mode.
+@export_range(0.0, 0.1, 0.0001) var direct_error_budget := 0.0002:
+	set(value):
+		direct_error_budget = maxf(0.0, value)
+		_sync(false)
 @export_group("Debug")
 @export var profile_stages := false:
 	set(value):
@@ -109,10 +126,11 @@ func _sync_lights() -> void:
 		return
 	# Light3D has no general property-change signal. Check only candidate lights;
 	# identical packed values cause no upload, history reset or editor redraw.
+	var previous_ids := _live_lights.point_ids
 	var data := _live_lights.pack()
-	if data != _light_data:
+	if data != _light_data or _live_lights.point_ids != previous_ids:
 		_light_data = data
-		RenderingServer.call_on_render_thread(_effect.replace_lights.bind(data))
+		RenderingServer.call_on_render_thread(_effect.replace_lights.bind(data, _live_lights.point_ids))
 
 func _update_editor_preview() -> void:
 	if not is_node_ready() or not is_inside_tree():
@@ -176,21 +194,24 @@ func rebuild() -> void:
 		return
 	var scene := get_tree().edited_scene_root if Engine.is_editor_hint() else get_tree().current_scene
 	var source := scene if source_root.is_empty() else get_node_or_null(source_root)
-	var proxy := get_node_or_null(trace_proxy_root) as Node3D if not trace_proxy_root.is_empty() else null
+	var hardware := prefer_hardware_trace and RenderingServer.get_rendering_device().has_feature(RenderingDevice.SUPPORTS_RAYTRACING_PIPELINE)
+	var use_proxy := not trace_proxy_root.is_empty() and not (hardware and hardware_trace_visible_geometry)
+	var proxy := get_node_or_null(trace_proxy_root) as Node3D if use_proxy else null
 	var snapshot := Snapshot.new()
 	if not source:
 		push_warning("Split RC: Source Root not found.")
 		snapshot = null
-	elif not trace_proxy_root.is_empty() and not proxy:
+	elif use_proxy and not proxy:
 		push_warning("Split RC: Trace Proxy Root not found.")
 		snapshot = null
-	elif not snapshot.build(source, proxy, prefer_hardware_trace and RenderingServer.get_rendering_device().has_feature(RenderingDevice.SUPPORTS_RAYTRACING_PIPELINE)):
+	elif not snapshot.build(source, proxy, hardware):
 		snapshot = null
 	_live_lights = Lights.new(source, proxy, snapshot.origin) if snapshot else null
 	_light_data = _live_lights.pack() if _live_lights else PackedVector4Array()
 	set_process(enabled and _live_lights != null)
 	_reset_profiler()
-	RenderingServer.call_on_render_thread(_effect.replace_scene.bind(snapshot, _light_data))
+	var point_ids := _live_lights.point_ids if _live_lights else PackedInt64Array()
+	RenderingServer.call_on_render_thread(_effect.replace_scene.bind(snapshot, _light_data, point_ids))
 
 func _reset_profiler() -> void:
 	if not _effect:
@@ -213,7 +234,7 @@ func _sync(reset: bool) -> void:
 			_reset_profiler()
 		var tuning := Vector4(probe_spacing, first_interval, lod_distance, history_retention)
 		var options := Vector4i(ray_stride, int(multi_bounce), view, debug_cascade)
-		RenderingServer.call_on_render_thread(_effect.configure.bind(tuning, options, strength, reset))
+		RenderingServer.call_on_render_thread(_effect.configure.bind(tuning, options, strength, reset, direct_mode, direct_error_budget))
 
 func _exit_tree() -> void:
 	_uninstall()

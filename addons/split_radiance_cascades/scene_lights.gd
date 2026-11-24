@@ -3,13 +3,15 @@ extends RefCounted
 ## Main-thread live lights, independent of the static geometry snapshot.
 ## Keep hidden and zero-energy candidates so they can contribute when enabled.
 
-const MAX_LIGHTS := 8
-const BUFFER_BYTES := MAX_LIGHTS * 32 # two vec4s per light
+const PointEmitter := preload("restir_point_light.gd")
+const MAX_NATIVE_LIGHTS := 8
+var point_ids := PackedInt64Array() # Stable node IDs of the DI suffix, in GPU order.
 
 var _source: Node
 var _proxy: Node3D
 var _origin: Vector3
 var _candidates: Array[Light3D] = []
+var _points: Array[PointEmitter] = []
 
 func _init(source: Node, proxy: Node3D, origin: Vector3) -> void:
 	_source = source
@@ -26,13 +28,16 @@ func _init(source: Node, proxy: Node3D, origin: Vector3) -> void:
 	tree.node_removed.connect(_untrack)
 
 func _track(node: Node) -> void:
-	if (node is DirectionalLight3D or node is OmniLight3D) and is_instance_valid(_source):
-		if node == _source or _source.is_ancestor_of(node):
-			_candidates.append(node as Light3D)
+	if not (node is DirectionalLight3D or node is OmniLight3D or node is PointEmitter): return
+	if is_instance_valid(_source) and (node == _source or _source.is_ancestor_of(node)):
+		if node is PointEmitter: _points.append(node)
+		else: _candidates.append(node)
 
 func _untrack(node: Node) -> void:
 	if node is Light3D:
 		_candidates.erase(node)
+	elif node is PointEmitter:
+		_points.erase(node)
 
 func _participates(node: Node, proxy: Node3D) -> bool:
 	while node:
@@ -47,13 +52,15 @@ func _participates(node: Node, proxy: Node3D) -> bool:
 
 func pack() -> PackedVector4Array:
 	var data := PackedVector4Array()
+	point_ids = PackedInt64Array()
 	if not is_instance_valid(_source) or not _source.is_inside_tree():
 		return data
 	var proxy := _proxy if is_instance_valid(_proxy) else null
 	for light in _candidates:
 		if light.light_negative or not _participates(light, proxy):
 			continue
-		var energy := light.light_color.srgb_to_linear() * light.light_energy * light.light_indirect_energy
+		var direct := light.light_color.srgb_to_linear() * light.light_energy
+		var energy := direct * light.light_indirect_energy
 		if energy.r + energy.g + energy.b <= 0.0:
 			continue
 		var v: Vector3
@@ -68,7 +75,17 @@ func pack() -> PackedVector4Array:
 		else:
 			v = light.global_basis.z.normalized()
 		data.append(Vector4(v.x, v.y, v.z, radius)) # w=0 for directional lights
-		data.append(Vector4(energy.r, energy.g, energy.b, attenuation))
-		if data.size() == MAX_LIGHTS * 2:
+		data.append(Vector4(direct.r, direct.g, direct.b, attenuation))
+		data.append(Vector4(energy.r, energy.g, energy.b, 0))
+		if data.size() == MAX_NATIVE_LIGHTS * 3:
 			break
+	for light in _points:
+		if light.energy <= 0 or light.radius <= 0 or not _participates(light, proxy): continue
+		var pos := light.global_position - _origin
+		var rgb := light.color.srgb_to_linear() * light.energy
+		var bounce := rgb * light.indirect_energy
+		data.append(Vector4(pos.x, pos.y, pos.z, light.radius))
+		data.append(Vector4(rgb.r, rgb.g, rgb.b, 2.0))
+		data.append(Vector4(bounce.r, bounce.g, bounce.b, 0))
+		point_ids.append(light.get_instance_id())
 	return data

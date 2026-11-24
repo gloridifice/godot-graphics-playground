@@ -44,7 +44,9 @@ func _process(_delta: float) -> void:
 	var valid := cascades and cascades.enabled and not _sample.is_empty() and now - _received < 2000
 	var total := Vector2.ZERO
 	var gpu_valid := valid
-	for stage: String in Profiler.STAGES:
+	var stages := Profiler.STAGES + Profiler.DIRECT_STAGES if _sample.has("DI shade") else Profiler.STAGES
+	%Stages.text = "Pass  /  ms\nViewport\nSRC total\n" + "\n".join(stages)
+	for stage: String in stages:
 		var t: Vector2 = _sample[stage] if valid else Vector2(-1,-1)
 		cpu.append(_ms(t.x))
 		gpu.append(_ms(t.y))

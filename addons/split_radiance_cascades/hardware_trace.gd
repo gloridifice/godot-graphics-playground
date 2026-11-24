@@ -8,8 +8,14 @@ const INPUT := RenderingDevice.BUFFER_CREATION_ACCELERATION_STRUCTURE_BUILD_INPU
 const FAST := RenderingDevice.ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT
 var shader: RID
 var _rd: RenderingDevice
-var _pipeline: RID
-var _sbt: RID
+class Program:
+	var shader: RID
+	var pipeline: RID
+	var sbt: RID
+	var hit_range: int
+
+var _gi: Program
+var _direct: Program
 var _scene_set: RID
 var _owned: Array[RID] = []
 
@@ -19,20 +25,9 @@ func _own(id: RID) -> RID:
 
 func build(rd: RenderingDevice, snapshot: Snapshot) -> bool:
 	_rd = rd
-	var spirv := ShaderFile.get_spirv()
-	if not spirv or spirv.bytecode_raygen.is_empty() or spirv.bytecode_closest_hit.is_empty() or spirv.bytecode_miss.is_empty(): return false
-	shader = _own(rd.shader_create_from_spirv(spirv))
-	if not shader.is_valid(): return false
-	var stages := RDPipelineShader.new()
-	stages.shader = shader
-	var hit := RDHitGroup.new()
-	hit.closest_hit_shader = stages
-	_pipeline = _own(rd.raytracing_pipeline_create([stages], [stages], [hit], 1))
-	if not _pipeline.is_valid(): return false
-	_sbt = _own(rd.hit_sbt_create(_pipeline, 1))
-	if not _sbt.is_valid(): return false
-	var hit_range := rd.hit_sbt_range_alloc(_sbt, 1)
-	if rd.hit_sbt_range_update(_sbt, hit_range, 0, PackedInt32Array([0])) != OK: return false
+	_gi = _build_program(ShaderFile)
+	if not _gi: return false
+	shader = _gi.shader
 	var shapes: Array[RID] = []
 	var bases := PackedInt32Array()
 	var normals := PackedVector4Array()
@@ -62,7 +57,7 @@ func build(rd: RenderingDevice, snapshot: Snapshot) -> bool:
 		inst.blas = shapes[src.surface]
 		inst.transform = src.transform
 		inst.id = instances.size()
-		inst.hit_sbt_range = hit_range
+		inst.hit_sbt_range = _gi.hit_range
 		instances.append(inst)
 		lookup.append(bases[src.surface])
 		lookup.append(src.material)
@@ -85,12 +80,36 @@ func build(rd: RenderingDevice, snapshot: Snapshot) -> bool:
 	print_verbose("Split RC hardware trace: %d BLAS, %d instances, %d unique triangles" % [shapes.size(),instances.size(),normals.size()])
 	return _scene_set.is_valid()
 
-func dispatch(frame_set: RID, tiles: Vector2i) -> void:
+func _build_program(file: RDShaderFile) -> Program:
+	var program := Program.new()
+	var spirv := file.get_spirv()
+	if not spirv or spirv.bytecode_raygen.is_empty() or spirv.bytecode_closest_hit.is_empty() or spirv.bytecode_miss.is_empty(): return null
+	program.shader = _own(_rd.shader_create_from_spirv(spirv))
+	if not program.shader.is_valid(): return null
+	var stages := RDPipelineShader.new()
+	stages.shader = program.shader
+	var hit := RDHitGroup.new()
+	hit.closest_hit_shader = stages
+	program.pipeline = _own(_rd.raytracing_pipeline_create([stages], [stages], [hit], 1))
+	if not program.pipeline.is_valid(): return null
+	program.sbt = _own(_rd.hit_sbt_create(program.pipeline, 1))
+	if not program.sbt.is_valid(): return null
+	program.hit_range = _rd.hit_sbt_range_alloc(program.sbt, 1)
+	if _rd.hit_sbt_range_update(program.sbt, program.hit_range, 0, PackedInt32Array([0])) != OK: return null
+	return program
+
+func direct_shader() -> RID:
+	if not _direct:
+		_direct = _build_program(preload("shaders/restir_hardware.glsl"))
+	return _direct.shader if _direct else RID()
+
+func dispatch(frame_set: RID, tiles: Vector2i, direct := false) -> void:
+	var program := _direct if direct else _gi
 	var list := _rd.raytracing_list_begin()
-	_rd.raytracing_list_bind_raytracing_pipeline(list, _pipeline)
+	_rd.raytracing_list_bind_raytracing_pipeline(list, program.pipeline)
 	_rd.raytracing_list_bind_uniform_set(list, frame_set, 0)
 	_rd.raytracing_list_bind_uniform_set(list, _scene_set, 1)
-	_rd.raytracing_list_trace_rays(list, 0, _sbt, tiles.x, tiles.y, 1)
+	_rd.raytracing_list_trace_rays(list, 0, program.sbt, tiles.x, tiles.y, 1)
 	_rd.raytracing_list_end()
 
 func close() -> void:

@@ -1,0 +1,13 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://b0qf33473vu07"
+path="res://.godot/imported/restir_di.glsl-d03d53246216357c921d3a61c3467501.res"
+
+[deps]
+
+source_file="res://addons/split_radiance_cascades/shaders/restir_di.glsl"
+dest_files=["res://.godot/imported/restir_di.glsl-d03d53246216357c921d3a61c3467501.res"]
+
+[params]

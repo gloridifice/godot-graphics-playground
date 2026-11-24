@@ -22,4 +22,5 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 func _caption() -> void:
-	$HUD/Caption.text = "Split Radiance Cascades   |   %s   ·   %s   ·   C%d\nG  GI     B  bounces     V  view     C  cascade     P  timings\n%s" % [VIEWS[gi.view] if gi.enabled else "GI off", "Multi-bounce" if gi.multi_bounce else "Single bounce", gi.debug_cascade, navigation_hint]
+	var view_name: String = "Direct only" if gi.view == RC.View.DIRECT_ONLY else VIEWS[gi.view]
+	$HUD/Caption.text = "Split Radiance Cascades   |   %s   ·   %s   ·   C%d\nG  effect     B  bounces     V  view     C  cascade     P  timings\n%s" % [view_name if gi.enabled else "Effect off", "Multi-bounce" if gi.multi_bounce else "Single bounce", gi.debug_cascade, navigation_hint]

@@ -5,7 +5,7 @@ extends CompositorEffect
 
 const ShaderFile := preload("shaders/cascades.glsl")
 const Snapshot := preload("scene_snapshot.gd")
-const Lights := preload("scene_lights.gd")
+const DirectPass := preload("restir_pass.gd")
 const CAPACITY := [8192, 2048, 512, 256] # power of two, at least eight ways
 const MAX_TILES := 262144 # also bounds the per-bank uint32 sums in merge.inc
 const PARAM_BYTES := 240
@@ -20,6 +20,15 @@ enum Stage { PREPARE, TRACE, GATHER, PARENTS, DEPOSIT, MERGE, RECEIVER, APPLY }
 var editor_redraw: Callable
 var _editor_views := {} # render target -> [unjittered view key, draws remaining]
 var _receiver := ReceiverPass.new()
+var _direct := DirectPass.new()
+var _direct_mode := 0
+var _direct_error := 0.0002
+var _point_ids := PackedInt64Array()
+var _light_capacity := 0
+var _indirect_display: RID
+var _display_size := Vector2i.ZERO
+var _display_target: RID
+var _display_clip := Projection()
 var _profiler: Profiler
 var _rd: RenderingDevice
 var _shader: RID
@@ -54,11 +63,16 @@ func _init() -> void:
 	access_resolved_depth = true
 	needs_normal_roughness = true
 
-func configure(tuning: Vector4, options: Vector4i, strength: float, reset: bool) -> void:
+func configure(tuning: Vector4, options: Vector4i, strength: float, reset: bool, direct_mode: int, direct_error: float) -> void:
 	_editor_views.clear()
+	_display_target = RID()
 	if reset:
 		_frame = 0
 		_light_travel = PackedFloat32Array()
+	if reset or _direct_mode != direct_mode or options.z != _options.z:
+		_direct.revision += 1
+	_direct_mode = direct_mode
+	_direct_error = direct_error
 	_tuning = tuning
 	_options = options
 	_strength = strength
@@ -110,7 +124,7 @@ func _initialize_rd() -> bool:
 		return false
 	return true
 
-func replace_scene(snapshot: Snapshot, lights: PackedVector4Array) -> void:
+func replace_scene(snapshot: Snapshot, lights: PackedVector4Array, point_ids: PackedInt64Array) -> void:
 	if _rt:
 		_rt.close()
 		_rt = null
@@ -144,27 +158,37 @@ func replace_scene(snapshot: Snapshot, lights: PackedVector4Array) -> void:
 	if not _receiver.bake_hit_materials(snapshot, _scene_buffers[2]):
 		_failure("ray hit material reflectance")
 		return
-	replace_lights(lights, true) # a new geometry/material snapshot always invalidates the probes
+	replace_lights(lights, point_ids, true) # a new geometry/material snapshot always invalidates the probes
 
 func _has_light_buffer() -> bool:
 	# A retained @tool instance can have Nil in a newly added RID member after reload.
 	return typeof(_light_buffer) == TYPE_RID and _light_buffer.is_valid()
 
-func replace_lights(lights: PackedVector4Array, new_scene := false) -> void:
+func replace_lights(lights: PackedVector4Array, point_ids: PackedInt64Array, new_scene := false) -> void:
 	if _failed or _scene_buffers.size() != 3:
 		return
-	# Allocate independently of the pipeline; a reloaded instance can already have one.
-	if not _has_light_buffer():
-		_light_buffer = _rd.storage_buffer_create(Lights.BUFFER_BYTES)
-		if not _has_light_buffer():
+	var count := lights.size() / 3
+	_display_target = RID()
+	if not _has_light_buffer() or count > _light_capacity:
+		_free(_light_buffer)
+		_light_capacity = maxi(8, count)
+		_light_buffer = _rd.storage_buffer_create(_light_capacity * 48)
+		if not _light_buffer.is_valid():
 			_failure("light buffer allocation")
 			return
+	if new_scene or point_ids != _point_ids:
+		_direct.revision += 1
+	_point_ids = point_ids
+	var positions := PackedVector4Array()
+	for i in range(count-point_ids.size(),count):
+		positions.append(lights[i*3])
+	_direct.light_positions = positions
 	if not lights.is_empty():
 		var bytes := lights.to_byte_array()
 		if _rd.buffer_update(_light_buffer, 0, bytes.size(), bytes) != OK:
 			_failure("light buffer upload")
 			return
-	_light_count = lights.size() >> 1 # A zero count bypasses stale entries in the buffer.
+	_light_count = count # A zero count bypasses stale entries in the buffer.
 	if new_scene or not _queue_light_travel(lights):
 		_reset_light_history()
 	else:
@@ -174,30 +198,33 @@ func replace_lights(lights: PackedVector4Array, new_scene := false) -> void:
 func _queue_light_travel(lights: PackedVector4Array) -> bool:
 	if _frame == 0 or typeof(_last_lights) != TYPE_PACKED_VECTOR4_ARRAY or lights.size() != _last_lights.size():
 		return false
-	for i in range(0, lights.size(), 2):
+	for i in range(0, lights.size(), 3):
 		var a := _last_lights[i]
 		var b := lights[i]
-		if a.w != b.w or lights[i+1] != _last_lights[i+1]: return false # range, energy, color or falloff
+		if lights[i+2] == Vector4.ZERO and _last_lights[i+2] == Vector4.ZERO: continue
+		if a.w != b.w or lights[i+2] != _last_lights[i+2] or lights[i+1].w != _last_lights[i+1].w: return false # range, energy, color or falloff
 		if a == b: continue
 		var step := a.distance_to(b) # same radius: this is the 3D displacement
 		if b.w <= 0.0 or step > minf(0.25*b.w, 2.0*_tuning.x): return false # directional edit or teleport
 		if _light_travel.is_empty(): _light_travel.resize(_light_count)
-		_light_travel[i >> 1] += step / _tuning.x
+		_light_travel[i / 3] += step / _tuning.x
 	return true
 
-func _consume_light_travel() -> Vector2i:
-	var words := Vector2i.ZERO
-	if typeof(_light_travel) != TYPE_PACKED_FLOAT32_ARRAY: return words # retained @tool instance on script reload
+func _consume_light_travel() -> bool:
+	if _light_travel.is_empty(): return false
+	var moving := false
+	var data := _last_lights.duplicate()
 	for i in _light_travel.size():
-		# Spread each step over a few draws (physics and render rates differ). Two
-		# exactly representable 24-bit integers fit in spare lanes of the existing UBO.
-		# Emit 20% of pending travel per draw. Keep a short tail so the display
-		# history releases gradually when a light stops; don't amplify total travel.
 		_light_travel[i] *= 0.8
-		var code := clampi(roundi(63.0*sqrt(_light_travel[i] * 0.25)), 0, 63)
-		words[i >> 2] |= code << (6*(i & 3))
-	if words == Vector2i.ZERO and not _light_travel.is_empty(): _light_travel.clear()
-	return words
+		var travel := clampf(roundf(63.0*sqrt(_light_travel[i]*0.25))/63.0, 0.0, 1.0)
+		data[3*i+2].w = travel
+		moving = moving or travel > 0.0
+	if moving:
+		var bytes := data.to_byte_array()
+		_rd.buffer_update(_light_buffer,0,bytes.size(),bytes)
+	else:
+		_light_travel.clear()
+	return moving
 
 func _reset_light_history() -> void:
 	_frame = 0 # PREPARE clears both probe banks before TRACE can read history.
@@ -225,7 +252,8 @@ func _render_callback(_type: int, data: RenderData) -> void:
 	var size := buffers.get_internal_size()
 	if size.x <= 0 or size.y <= 0:
 		return
-	var timed := _profiler != null and _profiler.begin(_rd)
+	var draw_direct := not _point_ids.is_empty() and (_options.z == 0 or _options.z == 5)
+	var timed := _profiler != null and _profiler.begin(_rd,draw_direct)
 	var stride := _options.x
 	var tiles := (size + Vector2i.ONE*(stride-1)) / stride
 	while tiles.x*tiles.y > MAX_TILES:
@@ -246,6 +274,18 @@ func _render_callback(_type: int, data: RenderData) -> void:
 	if not albedo.is_valid():
 		_failure("receiver framebuffer/pipeline")
 		return
+	var accumulate := draw_direct and _options.z == 0
+	var display_size := size if accumulate else Vector2i.ONE
+	if display_size != _display_size:
+		_free(_indirect_display)
+		var fmt := RDTextureFormat.new()
+		fmt.width = display_size.x
+		fmt.height = display_size.y
+		fmt.format = RenderingDevice.DATA_FORMAT_R16G16B16A16_SFLOAT
+		fmt.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT
+		_indirect_display = _rd.texture_create(fmt,RDTextureView.new())
+		_display_size = display_size
+		_display_target = RID()
 	var bindings := _uniform_set(depth, normal, color, albedo)
 	var rt_bindings := _uniform_set(depth, normal, color, albedo, true) if _rt else RID()
 	if not bindings.is_valid() or (_rt and not rt_bindings.is_valid()):
@@ -256,13 +296,20 @@ func _render_callback(_type: int, data: RenderData) -> void:
 	var xf := camera.get_cam_transform()
 	xf.origin -= _origin
 	var projection := camera.get_cam_projection() # includes renderer Y, reverse Z and jitter
+	var clip := projection * Projection(xf.affine_inverse())
+	var display_history := 0
+	if accumulate:
+		var target := buffers.get_render_target()
+		display_history = 2 if _display_target == target and _display_clip == clip else 1
+		_display_target = target
+		_display_clip = clip
 	var values := _matrix(projection.inverse())
 	values.append_array(_matrix(Projection(xf)))
 	values.append_array(_layout)
 	values.append_array(PackedVector4Array([_tuning]).to_byte_array())
 	values.append_array(PackedInt32Array([size.x, size.y, stride, _frame, _options.y, _options.z, _options.w, _light_count]).to_byte_array())
 	var travel := _consume_light_travel()
-	values.append_array(PackedFloat32Array([_strength, travel.x, travel.y, 0]).to_byte_array())
+	values.append_array(PackedFloat32Array([_strength, float(travel), display_history, 0]).to_byte_array())
 	_rd.buffer_update(_params, 0, PARAM_BYTES, values)
 	var tile_groups := (tiles + Vector2i(7,7)) / 8
 	_dispatch(bindings, Stage.PREPARE, 0, Vector2i((_slots+63)/64, 1))
@@ -284,12 +331,17 @@ func _render_callback(_type: int, data: RenderData) -> void:
 	for c in range(3, -1, -1):
 		_dispatch(bindings, Stage.MERGE, c, Vector2i.ZERO)
 	if timed: _profiler.end_stage(_rd, Stage.MERGE)
-	if _options.z <= 1 and not _receiver.draw(depth,_sampler,_matrix(projection * Projection(xf.affine_inverse()))):
+	if (_options.z <= 1 or _options.z == 5) and not _receiver.draw(depth,_sampler,_matrix(clip)):
 		_failure("receiver depth binding")
 		return
 	if timed: _profiler.end_stage(_rd, Stage.RECEIVER)
 	_dispatch(bindings, Stage.APPLY, 0, (size + Vector2i(7,7)) / 8)
 	if timed: _profiler.end_stage(_rd, Stage.APPLY)
+	if draw_direct:
+		if not _direct.draw(buffers,xf,projection,depth,normal,albedo,color,_sampler,_light_buffer,
+				_light_count-_point_ids.size(),_point_ids.size(),_scene_buffers,_rt,_direct_mode,_direct_error,_profiler if timed else null):
+			_failure("ReSTIR direct lighting")
+			return
 	if editor_redraw.is_valid():
 		_settle_editor_view(buffers.get_render_target(), [xf, size, projection.x.x, projection.y.y])
 
@@ -320,7 +372,7 @@ func _uniform_set(depth: RID, normal: RID, color: RID, albedo: RID, hardware := 
 	var uniforms: Array[RDUniform] = []
 	var ids: Array[RID] = [_params, _table, _counts, _active, _bins, _rays]
 	ids.append_array(_scene_buffers)
-	ids.append_array([_light_buffer, depth, normal, color, albedo])
+	ids.append_array([_light_buffer, depth, normal, color, albedo, _indirect_display])
 	for i in ids.size():
 		if hardware and i not in [0,1,4,5,8,9,10,11]: continue
 		var u := RDUniform.new()
@@ -331,7 +383,7 @@ func _uniform_set(depth: RID, normal: RID, color: RID, albedo: RID, hardware := 
 		elif i == 10 or i == 11 or i == 13:
 			u.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
 			u.add_id(_sampler)
-		elif i == 12:
+		elif i == 12 or i == 14:
 			u.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
 		u.add_id(ids[i])
 		uniforms.append(u)
@@ -353,11 +405,12 @@ func close() -> void:
 	if _rt:
 		_rt.close()
 		_rt = null
+	_direct.close()
 	_receiver.close()
 	for buffer in _scene_buffers:
 		_free(buffer)
 	_scene_buffers.clear()
 	if _has_light_buffer():
 		_free(_light_buffer)
-	for rid: RID in [_rays, _bins, _active, _args, _counts, _table, _params, _sampler, _pipeline, _shader]:
+	for rid: RID in [_indirect_display, _rays, _bins, _active, _args, _counts, _table, _params, _sampler, _pipeline, _shader]:
 		_free(rid)

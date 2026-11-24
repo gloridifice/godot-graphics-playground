@@ -10,22 +10,41 @@ layout(set=0,binding=6,std430) readonly buffer Nodes { vec4 nodes[]; };
 layout(set=0,binding=7,std430) readonly buffer Triangles { vec4 triangles[]; };
 layout(rgba16f,set=0,binding=12) uniform image2D color_tex;
 layout(set=0,binding=13) uniform sampler2D receiver_tex;
+layout(rgba16f,set=0,binding=14) uniform image2D indirect_display;
 
 #include "grid.inc"
+#include "scene_light.inc"
+#include "scene_query.inc"
+#include "surface.inc"
 #include "trace.inc"
 #include "light_motion.inc"
 #include "merge.inc"
 
 void apply_pixel(ivec2 pixel) {
 	if (any(greaterThanEqual(pixel,p.grid.xy))) return;
+	if (p.options.y == 5) { // Direct-only starts from black, including sky and non-receivers.
+		imageStore(color_tex,pixel,vec4(vec3(0),imageLoad(color_tex,pixel).a));
+		return;
+	}
 	vec3 pos, n;
-	if (!surface(pixel,pos,n)) return;
+	if (!surface(pixel,pos,n)) {
+		if (p.display.z > 0.0) imageStore(indirect_display,pixel,vec4(0));
+		return;
+	}
 	vec4 original = imageLoad(color_tex,pixel);
 	vec3 color = vec3(0);
 	int mode = p.options.y;
 	if (mode <= 1) {
 		vec4 receiver = texelFetch(receiver_tex,pixel,0);
 		if (receiver.a > 0.0) color = irradiance_over_pi(pos,n,false)*receiver.rgb*p.display.x;
+		if (p.display.z > 0.0) {
+			// Average only indirect diffuse at a stationary receiver. Native HDR and
+			// direct shadows stay current; this value never feeds another bounce.
+			vec4 old = p.display.z == 2.0 ? imageLoad(indirect_display,pixel) : vec4(0);
+			float count = receiver.a > 0.0 ? min(64.0,old.a+1.0) : 0.0;
+			if (count > 1.0) color = mix(old.rgb,color,1.0/count);
+			imageStore(indirect_display,pixel,vec4(color,count));
+		}
 		if (mode == 0) color += original.rgb;
 	} else {
 		float lod = lod_at(pos);

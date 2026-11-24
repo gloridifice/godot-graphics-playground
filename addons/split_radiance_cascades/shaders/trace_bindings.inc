@@ -18,6 +18,5 @@ layout(set=0,binding=4,std430) PROBE_ACCESS buffer Bins { Bin bins[]; };
 struct Ray { vec4 origin_t, rgb_bin; };
 layout(set=0,binding=5,std430) buffer Rays { Ray rays[]; };
 layout(set=0,binding=8,std430) readonly buffer Materials { vec4 materials[]; };
-layout(set=0,binding=9,std430) readonly buffer Lights { vec4 lights[]; };
 layout(set=0,binding=10) uniform sampler2D depth_tex;
 layout(set=0,binding=11) uniform sampler2D normal_tex;

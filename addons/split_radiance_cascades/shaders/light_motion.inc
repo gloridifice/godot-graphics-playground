@@ -1,14 +1,13 @@
 // Motion changes confidence, not the scene lighting. Skip all lamp reads at rest.
 shared float motion_loss;
 float light_motion_loss(uint key, int c) {
-	uvec2 words = uvec2(p.display.yz);
-	if ((words.x | words.y) == 0u) return 0.0;
+	if (p.display.y == 0.0) return 0.0;
 	int tag = tag_of(key);
 	float cell = spacing(tag,c);
 	vec3 center = (vec3(cell_of(key))+0.5)*cell;
 	float total = 0.0, moving = 0.0, peak = 0.0;
 	for (int i=0; i<p.options.w; ++i) {
-		vec4 light = lights[2*i], energy = lights[2*i+1];
+		vec4 light = lights[i].position_range, energy = lights[i].bounce;
 		float power = dot(energy.rgb,vec3(.2126,.7152,.0722));
 		if (light.w > 0.0) {
 			float d = distance(center,light.xyz);
@@ -16,9 +15,8 @@ float light_motion_loss(uint key, int c) {
 			float outer = inner + min(interval_end(tag,c),light.w) + 0.25*light.w;
 			float reach = 1.0-smoothstep(inner,outer,d);
 			// Approximate the light's share of diffuse transport, not shadow visibility.
-			power *= reach / pow(max(1.0,d),energy.w);
-			uint code = (words[i >> 2] >> (6*(i & 3))) & 63u;
-			float travel = float(code)/63.0;
+			power *= reach / pow(max(1.0,d),lights[i].direct_falloff.w);
+			float travel = energy.w;
 			float rate = reach*min(0.16,1.5*travel*travel);
 			peak = max(peak,rate);
 			moving += power*rate;

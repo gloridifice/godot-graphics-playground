@@ -1,0 +1,13 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dftaraci3po2w"
+path="res://.godot/imported/restir_hardware.glsl-a6db509a817ea387948f96dfd1b39a58.res"
+
+[deps]
+
+source_file="res://addons/split_radiance_cascades/shaders/restir_hardware.glsl"
+dest_files=["res://.godot/imported/restir_hardware.glsl-a6db509a817ea387948f96dfd1b39a58.res"]
+
+[params]

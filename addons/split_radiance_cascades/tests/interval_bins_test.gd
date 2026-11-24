@@ -50,7 +50,7 @@ func _run() -> void:
 	fmt.usage_bits = RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT | RenderingDevice.TEXTURE_USAGE_STORAGE_BIT
 	var sampler := rd.sampler_create(RDSamplerState.new())
 	_owned.append(sampler)
-	for i in 4:
+	for i in 5:
 		var texture := rd.texture_create(fmt,RDTextureView.new())
 		ids.append(texture)
 		_owned.append(texture)
@@ -63,7 +63,7 @@ func _run() -> void:
 		elif i == 10 or i == 11 or i == 13:
 			u.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
 			u.add_id(sampler)
-		elif i == 12: u.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+		elif i == 12 or i == 14: u.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
 		u.add_id(ids[i])
 		uniforms.append(u)
 	var shader := rd.shader_create_from_spirv(ShaderFile.get_spirv())
