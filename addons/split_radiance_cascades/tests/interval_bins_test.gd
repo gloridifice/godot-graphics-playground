@@ -54,6 +54,7 @@ func _run() -> void:
 		var texture := rd.texture_create(fmt,RDTextureView.new())
 		ids.append(texture)
 		_owned.append(texture)
+	ids.append(ids[9]) # Empty shadow tile header for this lightless fixture.
 	var uniforms: Array[RDUniform] = []
 	for i in ids.size():
 		var u := RDUniform.new()

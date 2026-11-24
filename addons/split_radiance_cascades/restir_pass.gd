@@ -34,7 +34,7 @@ func _initialize() -> bool:
 
 func draw(buffers: RenderSceneBuffersRD, xf: Transform3D, projection: Projection, depth: RID, normal: RID,
 		albedo: RID, color: RID, sampler: RID, lights: RID, first: int, count: int,
-		geometry: Array[RID], rt: HardwareTrace, mode: int, error_budget: float, profiler: Profiler) -> bool:
+		geometry: Array[RID], shadow_tiles: RID, rt: HardwareTrace, mode: int, error_budget: float, profiler: Profiler) -> bool:
 	if not _rd and not _initialize(): return false
 	var target := buffers.get_render_target()
 	var size := buffers.get_internal_size()
@@ -80,6 +80,7 @@ func draw(buffers: RenderSceneBuffersRD, xf: Transform3D, projection: Projection
 		if not ray_set.is_valid(): return false
 	for i in 2:
 		uniforms.append(_uniform(10+i,RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER,geometry[i]))
+	uniforms.append(_uniform(15,RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER,shadow_tiles))
 	var bindings := UniformSetCacheRD.get_cache(_shader,0,uniforms)
 	if not bindings.is_valid(): return false
 	var groups := (size+Vector2i(7,7))/8

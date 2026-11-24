@@ -1,12 +1,13 @@
 #[raygen]
 #version 460
 #extension GL_EXT_ray_tracing : require
-// Share the compute path's reservoirs and resolve, substituting TLAS visibility.
+// Share diffuse sampling and GGX shading with compute. All shadow rays use the TLAS.
 #define SRC_RAYGEN
 #include "rt_payload.inc"
 #include "restir_bindings.inc"
 #include "scene_light.inc"
 #include "scene_query.inc"
+#include "point_shadow_tiles.inc"
 #include "surface.inc"
 #include "restir_di.inc"
 void main() { shade(ivec2(gl_LaunchIDEXT.xy)); }

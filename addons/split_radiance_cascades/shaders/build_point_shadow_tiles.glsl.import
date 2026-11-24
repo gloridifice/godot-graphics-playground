@@ -1,0 +1,13 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://c65uqsl7fnfnx"
+path="res://.godot/imported/build_point_shadow_tiles.glsl-6f171862473b693047d0cd480617d3a6.res"
+
+[deps]
+
+source_file="res://addons/split_radiance_cascades/shaders/build_point_shadow_tiles.glsl"
+dest_files=["res://.godot/imported/build_point_shadow_tiles.glsl-6f171862473b693047d0cd480617d3a6.res"]
+
+[params]

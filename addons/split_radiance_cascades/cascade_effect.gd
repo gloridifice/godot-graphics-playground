@@ -21,6 +21,7 @@ var editor_redraw: Callable
 var _editor_views := {} # render target -> [unjittered view key, draws remaining]
 var _receiver := ReceiverPass.new()
 var _direct := DirectPass.new()
+var _shadow_tiles := preload("point_shadow_tiles.gd").new()
 var _direct_mode := 0
 var _direct_error := 0.0002
 var _point_ids := PackedInt64Array()
@@ -183,6 +184,9 @@ func replace_lights(lights: PackedVector4Array, point_ids: PackedInt64Array, new
 	for i in range(count-point_ids.size(),count):
 		positions.append(lights[i*3])
 	_direct.light_positions = positions
+	if not _shadow_tiles.update(_rd, _scene_buffers, PackedVector4Array() if _rt else positions, count - positions.size(), new_scene):
+		_failure("point light shadow tiles")
+		return
 	if not lights.is_empty():
 		var bytes := lights.to_byte_array()
 		if _rd.buffer_update(_light_buffer, 0, bytes.size(), bytes) != OK:
@@ -339,7 +343,7 @@ func _render_callback(_type: int, data: RenderData) -> void:
 	if timed: _profiler.end_stage(_rd, Stage.APPLY)
 	if draw_direct:
 		if not _direct.draw(buffers,xf,projection,depth,normal,albedo,color,_sampler,_light_buffer,
-				_light_count-_point_ids.size(),_point_ids.size(),_scene_buffers,_rt,_direct_mode,_direct_error,_profiler if timed else null):
+				_light_count-_point_ids.size(),_point_ids.size(),_scene_buffers,_shadow_tiles.buffer,_rt,_direct_mode,_direct_error,_profiler if timed else null):
 			_failure("ReSTIR direct lighting")
 			return
 	if editor_redraw.is_valid():
@@ -372,7 +376,7 @@ func _uniform_set(depth: RID, normal: RID, color: RID, albedo: RID, hardware := 
 	var uniforms: Array[RDUniform] = []
 	var ids: Array[RID] = [_params, _table, _counts, _active, _bins, _rays]
 	ids.append_array(_scene_buffers)
-	ids.append_array([_light_buffer, depth, normal, color, albedo, _indirect_display])
+	ids.append_array([_light_buffer, depth, normal, color, albedo, _indirect_display, _shadow_tiles.buffer])
 	for i in ids.size():
 		if hardware and i not in [0,1,4,5,8,9,10,11]: continue
 		var u := RDUniform.new()
@@ -406,6 +410,7 @@ func close() -> void:
 		_rt.close()
 		_rt = null
 	_direct.close()
+	_shadow_tiles.close()
 	_receiver.close()
 	for buffer in _scene_buffers:
 		_free(buffer)

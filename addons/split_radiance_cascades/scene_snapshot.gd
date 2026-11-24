@@ -10,6 +10,7 @@ class Face:
 	var ab: Vector3
 	var ac: Vector3
 	var center: Vector3
+	var bounds: AABB
 	var material: int
 
 # Receivers always follow visible geometry, not the optional tracing proxy.
@@ -161,6 +162,7 @@ func _add_faces(vertices: PackedVector3Array, indices: PackedInt32Array, materia
 		face.ab = b - a
 		face.ac = c - a
 		face.center = (a + b + c) / 3.0
+		face.bounds = AABB(a,Vector3.ZERO).expand(a+face.ab).expand(a+face.ac)
 		face.material = material
 		_faces.append(face)
 	return true
@@ -204,13 +206,11 @@ func _material_id(mat: BaseMaterial3D) -> int:
 func _build_node(faces: Array[Face]) -> void:
 	var index := nodes.size()
 	nodes.resize(index + 2)
-	var low := faces[0].a
-	var high := low
+	var bounds := faces[0].bounds
+	var centers := AABB(faces[0].center,Vector3.ZERO)
 	for f in faces:
-		var b := f.a + f.ab
-		var c := f.a + f.ac
-		low = low.min(f.a).min(b).min(c)
-		high = high.max(f.a).max(b).max(c)
+		bounds = bounds.merge(f.bounds)
+		centers = centers.expand(f.center)
 	var first := 0
 	var count := 0
 	if faces.size() <= 4:
@@ -221,10 +221,41 @@ func _build_node(faces: Array[Face]) -> void:
 			triangles.append(Vector4(f.ab.x, f.ab.y, f.ab.z, 0))
 			triangles.append(Vector4(f.ac.x, f.ac.y, f.ac.z, 0))
 	else:
-		var axis := (high - low).max_axis_index()
+		var axis := centers.size.max_axis_index()
 		faces.sort_custom(func(a: Face, b: Face) -> bool: return a.center[axis] < b.center[axis])
-		var half := faces.size() >> 1
-		_build_node(faces.slice(0, half))
-		_build_node(faces.slice(half))
+		var split := _split_index(faces)
+		_build_node(faces.slice(0, split))
+		_build_node(faces.slice(split))
+	var low := bounds.position
+	var high := bounds.end
 	nodes[index] = Vector4(low.x, low.y, low.z, nodes.size() >> 1)
 	nodes[index + 1] = Vector4(high.x, high.y, high.z, (first << 3) | count)
+
+# Compare seven splits on the widest centroid axis. Area times primitive count
+# estimates traversal work; equal-sized groups bound recursion even with coincident centers.
+func _split_index(faces: Array[Face]) -> int:
+	var size := faces.size()
+	if size < 16: return size >> 1
+	var groups: Array[AABB] = []
+	for i in 8:
+		var start := size*i/8
+		var bounds := faces[start].bounds
+		for j in range(start+1,size*(i+1)/8): bounds = bounds.merge(faces[j].bounds)
+		groups.append(bounds)
+	var right := groups.duplicate()
+	for i in range(6,0,-1): right[i] = right[i].merge(right[i+1])
+	var left := groups[0]
+	var best_cost := INF
+	var split := size >> 1
+	for i in range(1,8):
+		var n := size*i/8
+		var cost := n*_half_area(left) + (size-n)*_half_area(right[i])
+		if cost < best_cost:
+			best_cost = cost
+			split = n
+		left = left.merge(groups[i])
+	return split
+
+func _half_area(box: AABB) -> float:
+	var s := box.size
+	return s.x*s.y + s.y*s.z + s.z*s.x

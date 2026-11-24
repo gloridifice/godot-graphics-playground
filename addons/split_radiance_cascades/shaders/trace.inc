@@ -16,7 +16,7 @@ vec3 hit_light(vec3 pos, vec3 n, int tri) {
 		float reach;
 		float factor = diffuse_factor(lamp, pos, n, l, reach);
 		if (factor > 0.0 && any(greaterThan(lamp.bounce.rgb, vec3(0))) &&
-				intersect_scene(pos+n*BIAS, l, reach-BIAS, true).tri < 0)
+				light_visible(i,pos+n*BIAS,l,reach))
 			illumination += lamp.bounce.rgb * factor;
 	}
 	if (p.options.x != 0) illumination += irradiance_over_pi(pos,n,true);

@@ -1,18 +1,48 @@
 const int STABLE = 0, RAW = 1, RIS = 2, REFERENCE = 3;
-struct Receiver { vec3 pos, n, albedo; };
+struct Receiver { vec3 pos, n, albedo, view; float roughness; };
+const float DIELECTRIC_F0 = 0.04; // Godot's default specular 0.5; metal tint is not in receiver_tex
 bool receiver_at(ivec2 px, out Receiver s) {
 	vec4 material = texelFetch(receiver_tex, px, 0);
 	s.albedo = material.rgb;
-	return material.a > 0.0 && surface(px, s.pos, s.n);
+	s.view = vec3(0,0,1);
+	s.roughness = 1.0;
+	if (!(material.a > 0.0 && surface(px, s.pos, s.n))) return false;
+	s.view = normalize(p.camera[3].xyz - s.pos);
+	// Forward+ stores roughness in [0,0.5] x 127/255; the high half marks other material flags.
+	float stored = texelFetch(normal_tex, px, 0).a;
+	if (stored > 0.5) stored = 1.0 - stored;
+	s.roughness = clamp(stored / (127.0/255.0), 0.05, 1.0);
+	return true;
 }
+// GGX distribution, height-correlated Smith visibility and Schlick Fresnel.
+float specular_brdf(Receiver s, vec3 l, float nl) {
+	float nv = max(dot(s.n,s.view),1e-4);
+	vec3 h = normalize(l + s.view);
+	float nh = max(dot(s.n,h), 0.0), vh = max(dot(s.view,h), 0.0);
+	float a = s.roughness*s.roughness, a2 = a*a;
+	float d = nh*nh*(a2-1.0) + 1.0;
+	float distribution = a2 / (3.14159265359*d*d);
+	float visibility = 0.5 / max(nl*sqrt(nv*nv*(1.0-a2)+a2) + nv*sqrt(nl*nl*(1.0-a2)+a2), 1e-5);
+	float fresnel = DIELECTRIC_F0 + (1.0-DIELECTRIC_F0)*pow(1.0-vh,5.0);
+	return distribution * visibility * fresnel;
+}
+// Unshadowed lamp contribution at the receiver: Lambert diffuse plus GGX specular.
 vec3 contribution(Receiver s, int id, out vec3 l, out float reach) {
 	SceneLight lamp = lights[p.grid.z + id];
-	return s.albedo * lamp.direct_falloff.rgb * diffuse_factor(lamp,s.pos,s.n,l,reach);
+	float scale = light_scale(lamp,s.pos,l,reach);
+	float nl = dot(s.n,l);
+	if (scale <= 0.0 || nl <= 0.0) return vec3(0);
+	vec3 brdf = s.albedo / 3.14159265359 + specular_brdf(s,l,nl);
+	return (lamp.direct_falloff.rgb * (scale*nl)) * brdf;
 }
+// Proposal target stays diffuse-only: it is view independent, so history and
+// neighbors remain reusable. Specular is added when the chosen lamp is shaded.
 float target(Receiver s, int id) {
 	vec3 l; float reach;
+	SceneLight lamp = lights[p.grid.z + id];
+	vec3 diffuse = s.albedo * lamp.direct_falloff.rgb * diffuse_factor(lamp,s.pos,s.n,l,reach);
 	// Keep proposal support across surface changes, including a light just outside its range.
-	return dot(contribution(s,id,l,reach), vec3(0.2126,0.7152,0.0722)) + 1e-7;
+	return dot(diffuse,vec3(0.2126,0.7152,0.0722)) + 1e-7;
 }
 uint seed(ivec2 px) {
 	return uint(px.x + px.y*p.grid.x) ^ (uint(p.frame.y)*0x9e3779b9u);
@@ -100,10 +130,6 @@ Reservoir spatial(ivec2 px, Receiver s) {
 	normalize_reservoir(r,s);
 	return r;
 }
-bool visible(Receiver s, vec3 l, float reach) {
-	return intersect_scene(s.pos+s.n*BIAS,l,reach-BIAS,true).tri < 0;
-}
-
 // Point lights have one binary visibility per fixed surface point. Integrate
 // known terms exactly. The unresolved sum bounds every possible shadow result;
 // spend extra rays on cold pixels until the remaining RGB interval fits the budget.
@@ -114,7 +140,7 @@ vec3 resolve(Receiver s, Reservoir r, inout uvec2 masks) {
 		vec3 l; float reach;
 		vec3 c = contribution(s,r.id,l,reach);
 		if (all(equal(c,vec3(0)))) return vec3(0);
-		return visible(s,l,reach) ? r.weight*c : vec3(0);
+		return light_visible(p.grid.z+r.id,s.pos+s.n*BIAS,l,reach) ? r.weight*c : vec3(0);
 	}
 	for (int id=0; id<p.grid.w; ++id) {
 		vec3 l; float reach;
@@ -123,7 +149,7 @@ vec3 resolve(Receiver s, Reservoir r, inout uvec2 masks) {
 		uint bit = id < 32 ? 1u << uint(id) : 0u;
 		bool lit;
 		if (p.frame.x == REFERENCE) {
-			lit = visible(s,l,reach);
+			lit = intersect_scene(s.pos+s.n*BIAS,l,reach-BIAS,true).tri < 0;
 		} else if ((masks.x & bit) != 0u) {
 			lit = (masks.y & bit) != 0u;
 		} else {
@@ -131,7 +157,7 @@ vec3 resolve(Receiver s, Reservoir r, inout uvec2 masks) {
 				unresolved += c;
 				continue;
 			}
-			lit = visible(s,l,reach);
+			lit = light_visible(p.grid.z+id,s.pos+s.n*BIAS,l,reach);
 			masks.x |= bit;
 			if (lit) masks.y |= bit;
 		}

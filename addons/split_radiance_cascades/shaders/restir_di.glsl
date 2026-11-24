@@ -6,6 +6,7 @@ layout(push_constant, std430) uniform Command { int stage, pad1, pad2, pad3; } c
 #include "restir_bindings.inc"
 #include "scene_light.inc"
 #include "scene_query.inc"
+#include "point_shadow_tiles.inc"
 #include "surface.inc"
 #include "restir_di.inc"
 void main() {

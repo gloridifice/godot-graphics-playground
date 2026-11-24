@@ -15,6 +15,7 @@ layout(rgba16f,set=0,binding=14) uniform image2D indirect_display;
 #include "grid.inc"
 #include "scene_light.inc"
 #include "scene_query.inc"
+#include "point_shadow_tiles.inc"
 #include "surface.inc"
 #include "trace.inc"
 #include "light_motion.inc"

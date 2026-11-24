@@ -69,6 +69,17 @@ func _run() -> void:
 	camera.set_process(false) # Replay exact transforms without the interactive fly controller.
 	var reference := await _image(20)
 	_save(reference,"reference")
+	# Both DI modes share the occluders. A proxy cutting through the plaster can
+	# agree with All Lights pixel for pixel while blacking out entire vault bays.
+	var vault := reference.get_region(Rect2i(430, 0, 280, 318))
+	var dark_pixels := 0
+	for y in vault.get_height():
+		for x in vault.get_width():
+			if vault.get_pixel(x, y).v < 32.0 / 255.0:
+				dark_pixels += 1
+	var dark_fraction := float(dark_pixels) / (vault.get_width() * vault.get_height())
+	print("Arcade vault, near-black direct pixels: %.2f%%" % (100.0 * dark_fraction))
+	_check(dark_fraction < 0.10, "the lit arcade vault must retain direct light around the lantern shadows")
 	lamps.hide()
 	var dark := await _image(4)
 	lamps.show()

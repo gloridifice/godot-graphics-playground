@@ -91,6 +91,57 @@ def triangles(doc):
                for p in doc['meshes'][n['mesh']]['primitives'])
 
 
+def match_vault_geometry(visible_path, trace_path):
+    """Trace the visible vaults and their stone arches with the proxy's hit materials."""
+    visible = json.loads(visible_path.read_text(encoding='utf-8'))
+    visible_data = (visible_path.parent / visible['buffers'][0]['uri']).read_bytes()
+    glb = trace_path.read_bytes()
+    json_size = struct.unpack_from('<I', glb, 12)[0]
+    trace = json.loads(glb[20:20 + json_size])
+    trace_data = glb[28 + json_size:]
+
+    # gltfpack bakes these architectural surfaces into world space in both models.
+    def geometry_by_material(doc):
+        return {doc['materials'][p['material']]['name']: (p['attributes']['POSITION'], p['indices'])
+                for mesh in doc['meshes'] for p in mesh['primitives']}
+
+    source = geometry_by_material(visible)
+    dest = geometry_by_material(trace)
+    replacements = {}
+    for name in ('ceiling_plaster_01', 'ceiling_plaster_02', 'arch_stone_wall_01'):
+        replacements.update(zip(dest[name], source[name]))
+
+    # Repack the proxy's two streams (float3 positions and unsigned indices).
+    # Keep the mesh, node, material and accessor indices referenced by the scene.
+    streams = [bytearray() for _ in trace['bufferViews']]
+    for index, original in enumerate(trace['accessors']):
+        doc, data, accessor = trace, trace_data, original
+        if index in replacements:
+            doc, data, accessor = visible, visible_data, visible['accessors'][replacements[index]]
+        view = doc['bufferViews'][accessor['bufferView']]
+        width = 12 if accessor['type'] == 'VEC3' else {5121: 1, 5123: 2, 5125: 4}[accessor['componentType']]
+        offset = view.get('byteOffset', 0) + accessor.get('byteOffset', 0)
+        elements = np.ndarray((accessor['count'], width), dtype=np.uint8, buffer=data,
+                              offset=offset, strides=(view.get('byteStride', width), 1))
+        stream = streams[original['bufferView']]
+        stream.extend(bytes(-len(stream) % 4))
+        trace['accessors'][index] = dict(accessor, bufferView=original['bufferView'], byteOffset=len(stream))
+        stream.extend(elements.tobytes())
+
+    binary = bytearray()
+    for view, stream in zip(trace['bufferViews'], streams):
+        view.update(byteOffset=len(binary), byteLength=len(stream))
+        binary.extend(stream)
+        binary.extend(bytes(-len(binary) % 4))
+    trace['buffers'][0]['byteLength'] = len(binary)
+    metadata = json.dumps(trace, separators=(',', ':')).encode('utf-8')
+    metadata += b' ' * (-len(metadata) % 4)
+    header = struct.pack('<4sIII4s', b'glTF', 2, 28 + len(metadata) + len(binary), len(metadata), b'JSON')
+    packed = trace_path.with_suffix('.tmp')
+    packed.write_bytes(header + metadata + struct.pack('<I4s', len(binary), b'BIN\0') + binary)
+    packed.replace(trace_path)
+
+
 def bake(base, curtains, gltfpack, out):
     out.mkdir(exist_ok=True, parents=True)
     with tempfile.TemporaryDirectory() as tmp:
@@ -120,6 +171,8 @@ def bake(base, curtains, gltfpack, out):
                 src.write_text(json.dumps(model), encoding='utf-8')
                 subprocess.run([gltfpack, '-i', src, '-o', dst, '-noq', *options], check=True)
                 if dst.suffix == '.glb':
+                    if name == 'palace':
+                        match_vault_geometry(work / 'palace.gltf', dst)
                     blob = dst.read_bytes()
                     length = struct.unpack_from('<I', blob, 12)[0]
                     count = triangles(json.loads(blob[20:20 + length]))

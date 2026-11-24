@@ -42,7 +42,7 @@ environment = SubResource("Daylight")
 script = ExtResource("2_gi")
 preview_in_editor = true
 source_root = NodePath("../../Subject")
-prefer_hardware_trace = true
+trace_proxy_root = NodePath("../../Subject/TraceProxy")
 strength = 3.0
 probe_spacing = 0.45
 first_interval = 0.65
@@ -72,7 +72,7 @@ shadow_enabled = true
 directional_shadow_max_distance = 60.0
 
 [node name="GalleryLight" type="OmniLight3D" parent="Subject" unique_id=576286022]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.5670166, 1.352787, -0.08239412)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.2795315, 1.352787, -0.08239412)
 light_color = Color(1, 0.82, 0.65, 1)
 light_energy = 4.5
 light_indirect_energy = 8.0
@@ -80,7 +80,7 @@ shadow_enabled = true
 omni_range = 9.0
 
 [node name="GalleryLight" type="OmniLight3D" parent="Subject/GalleryLight" unique_id=1149814776]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.943336, 1.352787, -0.08239412)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.943336, 1.352787, -0.50577974)
 light_color = Color(1, 0.82, 0.65, 1)
 light_energy = 4.5
 light_indirect_energy = 8.0

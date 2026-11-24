@@ -5,7 +5,8 @@ struct SceneLight {
 };
 layout(set=0,binding=9,std430) readonly buffer Lights { SceneLight lights[]; };
 
-float diffuse_factor(SceneLight lamp, vec3 pos, vec3 n, out vec3 direction, out float reach) {
+// Distance window and falloff, without any surface term. Zero outside the lamp's range.
+float light_scale(SceneLight lamp, vec3 pos, out vec3 direction, out float reach) {
 	direction = lamp.position_range.xyz;
 	reach = 1e20;
 	float scale = 1.0;
@@ -18,5 +19,10 @@ float diffuse_factor(SceneLight lamp, vec3 pos, vec3 n, out vec3 direction, out 
 		float window = 1.0 - pow(reach/radius, 4.0);
 		scale = window*window / pow(max(0.1,reach), lamp.direct_falloff.w);
 	}
+	return scale;
+}
+
+float diffuse_factor(SceneLight lamp, vec3 pos, vec3 n, out vec3 direction, out float reach) {
+	float scale = light_scale(lamp, pos, direction, reach);
 	return max(0.0, dot(n,direction)) * scale / 3.14159265359;
 }
