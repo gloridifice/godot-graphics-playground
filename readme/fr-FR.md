@@ -12,9 +12,9 @@
 
 Des scènes Godot 4.7.2 pour expérimenter avec l’éclairage en temps réel, la brume au sol et les mouvements d’un personnage dans le moteur de rendu Forward+.
 
-![Quatre vues de Sponza : la nef, les arcades, la galerie supérieure et la cour aux tentures colorées](images/sponza-restir.jpg)
+![Quatre vues de Sponza : la nef, les arcades, une vue d’ensemble depuis le centre de l’atrium et la cour au soleil](images/sponza-restir.jpg)
 
-*Intel Sponza 2022 · Vulkan · éclairage direct par ReSTIR DI · éclairage indirect à deux rebonds par Split Radiance Cascades. Les vues du bas utilisent 12 lumières ponctuelles aux tons pastel réparties sur deux niveaux, avec une énergie indirecte six fois supérieure à la valeur par défaut. La lumière ambiante du ciel est désactivée en bas à gauche et activée en bas à droite.*
+*Intel Sponza 2022 · Vulkan · éclairage indirect à deux rebonds par Split Radiance Cascades. En haut : la nef et les arcades éclairées par ReSTIR DI. En bas à gauche : les deux niveaux de l’atrium vus au grand-angle depuis le centre, éclairés par le soleil et les lampes de galerie de la [scène de la torche](../scenes/sponza_torch_walk.tscn). En bas à droite : uniquement la lumière du soleil et ses rebonds diffus. Les deux vues du bas sont rendues sans lumière ambiante du ciel ni reflets du ciel.*
 
 **Éclairage direct (DI) :** ReSTIR DI réutilise les échantillons de lumières ponctuelles de l’image précédente et des pixels voisins, les pondère selon leur contribution à la surface courante et teste leur visibilité pour calculer les ombres.
 **Éclairage indirect (GI) :** Split Radiance Cascades trace des rayons dans l’espace monde, stocke la lumière incidente par direction dans une hiérarchie de sondes et la réutilise pour calculer un second rebond diffus.
@@ -65,7 +65,7 @@ Après l’importation, vérifiez que l’exécutable Godot figure dans votre `P
 godot --rendering-driver vulkan scenes/sponza_restir_di.tscn
 ```
 
-ReSTIR DI est actif au démarrage. Appuyez une fois sur **B** pour activer le second rebond de lumière indirecte, puis laissez l’éclairage se stabiliser.
+ReSTIR DI et les deux rebonds de GI sont actifs au démarrage. Appuyez sur **B** pour passer à un seul rebond et laissez l’éclairage se stabiliser avant de comparer.
 
 ## Licences et crédits
 

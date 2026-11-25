@@ -12,9 +12,9 @@
 
 一组 Godot 4.7.2 Forward+ 实验场景，用于观察实时光照、贴地雾和角色运动。
 
-![Sponza 四个视角：中庭、拱廊、上层回廊和挂有彩色帷幔的庭院](images/sponza-restir.jpg)
+![Sponza 四个视角：中庭、拱廊、沿中庭中轴拍摄的广角全景和阳光下的庭院](images/sponza-restir.jpg)
 
-*Intel Sponza 2022 · Vulkan · ReSTIR DI 直接光照 · Split Radiance Cascades 两次反弹间接光照。下排的 12 盏低饱和度彩色点光源分布在上下两层，间接光能量为默认值的 6 倍。左下关闭天空环境光，右下开启。*
+*Intel Sponza 2022 · Vulkan · Split Radiance Cascades 双反弹 GI。上排：ReSTIR DI 照亮的中庭和拱廊。左下：从中庭中央用广角拍下地面和上层拱廊，由太阳光和[火把步行场景](../scenes/sponza_torch_walk.tscn)的廊灯照明。右下：仅太阳直射及其漫反射反弹。下排两图均关闭天空环境光和天空反射。*
 
 **直接光照（DI）：** ReSTIR DI 复用上一帧和相邻像素的点光源样本，按各光源对当前表面的贡献重新采样，再通过遮挡检测计算阴影。
 **间接光照（GI）：** Split Radiance Cascades 在世界空间追踪射线，用多级探针按方向缓存入射光，并复用这些光照数据计算第二次漫反射反弹。
@@ -65,7 +65,7 @@ cd godot-graphics-playground
 godot --rendering-driver vulkan scenes/sponza_restir_di.tscn
 ```
 
-场景默认开启 ReSTIR DI。按一次 **B** 开启第二次间接光反弹，等待光照稳定。
+场景默认开启 ReSTIR DI 和双反弹 GI。按 **B** 可切换到单次反弹，等光照稳定后再比较。
 
 ## 许可与致谢
 

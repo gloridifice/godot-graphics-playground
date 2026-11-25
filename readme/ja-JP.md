@@ -12,9 +12,9 @@
 
 Godot 4.7.2 の Forward+ でリアルタイム照明、地面を流れる霧、キャラクターの動きを試せるシーン集です。
 
-![Sponza の中央通路、アーチの回廊、上階の回廊、幕のかかった中庭を写した4枚の画面](images/sponza-restir.jpg)
+![Sponza の中央通路、アーチの回廊、中庭の中央からの広角写真、日差しの入る中庭](images/sponza-restir.jpg)
 
-*Intel Sponza 2022 · Vulkan · ReSTIR DI による直接照明 · Split Radiance Cascades による 2 バウンスの間接照明。下段では上下階に淡い色の点光源を 12 個分散させ、間接光エネルギーを既定値の 6 倍にしています。空からの環境光は左下で無効、右下で有効です。*
+*Intel Sponza 2022 · Vulkan · Split Radiance Cascades による 2 バウンスの間接照明。上段は ReSTIR DI で照らした中央通路と回廊です。左下は中庭の中央から広角で捉えた上下階の回廊です。太陽光と[松明を持って歩くシーン](../scenes/sponza_torch_walk.tscn)の回廊灯で照らしています。右下は太陽の直射光とその拡散反射のみです。下段の 2 枚では、空からの環境光と空の映り込みを無効にしています。*
 
 **直接照明（DI）：** ReSTIR DI は前フレームと隣接ピクセルの点光源サンプルを再利用し、現在の表面への寄与に応じて再サンプリングしたうえで、遮蔽判定により影を求めます。
 **間接照明（GI）：** Split Radiance Cascades はワールド空間でレイを追跡し、階層化したプローブに入射光を方向別に記録して、2 回目の拡散反射の計算にも使います。
@@ -65,7 +65,7 @@ cd godot-graphics-playground
 godot --rendering-driver vulkan scenes/sponza_restir_di.tscn
 ```
 
-ReSTIR DI は初めから有効です。**B** を一度押すと間接光の 2 回目の反射が有効になります。照明が安定するまで少し待ってください。
+ReSTIR DI と 2 バウンスの GI は起動時から有効です。**B** で 1 バウンスに切り替え、照明が安定してから見比べてください。
 
 ## ライセンスとクレジット
 

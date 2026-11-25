@@ -12,9 +12,9 @@ English | [简体中文](readme/zh-CN.md) | [日本語](readme/ja-JP.md) | [Fran
 
 Godot 4.7.2 Forward+ scenes for experimenting with real-time lighting, ground fog and character motion.
 
-![Four views of Sponza: the nave, vaulted arcade, upper gallery and curtained courtyard](readme/images/sponza-restir.jpg)
+![Four views of Sponza: the nave, vaulted arcade, a wide view down the center of the atrium, and the sunlit courtyard](readme/images/sponza-restir.jpg)
 
-*Intel Sponza 2022 · Vulkan · ReSTIR DI · two-bounce GI with Split Radiance Cascades. The bottom row uses 12 pastel point lights spread across both levels, with indirect energy set to 6× the default. Skylight is off on the left and on on the right.*
+*Intel Sponza 2022 · Vulkan · two-bounce GI with Split Radiance Cascades. Top: ReSTIR DI in the nave and arcade. Bottom left: a wide view of both levels from the center of the atrium, lit by the sun and the [Torch Walk](scenes/sponza_torch_walk.tscn) gallery lights. Bottom right: sunlight and its diffuse bounces only. Both bottom views have sky lighting and sky reflections disabled.*
 
 **Direct lighting (DI):** ReSTIR DI reuses point-light samples from the previous frame and neighboring pixels, weights them by their contribution to the current surface, and tests visibility to resolve shadows.
 **Indirect lighting (GI):** Split Radiance Cascades traces rays in world space, stores incoming light by direction in a hierarchy of probes, and reuses that light for a second diffuse bounce.
@@ -65,7 +65,7 @@ After import, run this from the project directory with the Godot executable on y
 godot --rendering-driver vulkan scenes/sponza_restir_di.tscn
 ```
 
-ReSTIR DI starts enabled. Press **B** once for the second GI bounce and let the lighting settle.
+ReSTIR DI and two-bounce GI are on by default. Press **B** to switch to a single bounce, then let the lighting settle before comparing.
 
 ## License and Credits
 
